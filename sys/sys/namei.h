@@ -75,7 +75,9 @@ struct nameidata {
 	 */
 	struct  vnode *ni_startdir;	/* starting directory */
 	struct	vnode *ni_rootdir;	/* logical root directory */
+#ifndef __rtems__
 	struct	vnode *ni_topdir;	/* logical top directory */
+#endif /* __rtems__ */
 	int	ni_dirfd;		/* starting directory for *at functions */
 	int	ni_lcf;			/* local call flags */
 	/*

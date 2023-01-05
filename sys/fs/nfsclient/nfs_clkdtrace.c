@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 
+#ifndef __rtems__
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -585,3 +586,4 @@ MODULE_DEPEND(dtnfscl, dtrace, 1, 1, 1);
 MODULE_DEPEND(dtnfscl, opensolaris, 1, 1, 1);
 MODULE_DEPEND(dtnfscl, nfscl, 1, 1, 1);
 MODULE_DEPEND(dtnfscl, nfscommon, 1, 1, 1);
+#endif /* __rtems__ */

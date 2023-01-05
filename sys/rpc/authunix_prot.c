@@ -74,7 +74,11 @@ xdr_authunix_parms(XDR *xdrs, uint32_t *time, struct xucred *cred)
 		/*
 		 * Restrict name length to 255 according to RFC 1057.
 		 */
+#ifndef __rtems__
 		getcredhostname(NULL, hostbuf, sizeof(hostbuf));
+#else /* __rtems__ */
+		gethostname(hostbuf, sizeof(hostbuf));
+#endif /* __rtems__ */
 		namelen = strlen(hostbuf);
 		if (namelen > 255)
 			namelen = 255;
@@ -97,9 +101,19 @@ xdr_authunix_parms(XDR *xdrs, uint32_t *time, struct xucred *cred)
 		xdr_setpos(xdrs, xdr_getpos(xdrs) + RNDUP(namelen));
 	}
 
+#ifndef __rtems__
 	if (!xdr_uint32_t(xdrs, &cred->cr_uid))
+#else /* __rtems__ */
+	junk = cred->cr_uid;
+	if (!xdr_uint32_t(xdrs, &junk))
+#endif /* __rtems__ */
 		return (FALSE);
+#ifndef __rtems__
 	if (!xdr_uint32_t(xdrs, &cred->cr_groups[0]))
+#else /* __rtems__ */
+	junk = cred->cr_groups[0];
+	if (!xdr_uint32_t(xdrs, &junk))
+#endif /* __rtems__ */
 		return (FALSE);
 
 	if (xdrs->x_op == XDR_ENCODE) {
@@ -112,7 +126,12 @@ xdr_authunix_parms(XDR *xdrs, uint32_t *time, struct xucred *cred)
 		return (FALSE);
 	for (i = 0; i < ngroups; i++) {
 		if (i + 1 < ngroups_max + 1) {
+#ifndef __rtems__
 			if (!xdr_uint32_t(xdrs, &cred->cr_groups[i + 1]))
+#else /* __rtems__ */
+			junk = cred->cr_uid;
+			if (!xdr_uint32_t(xdrs, &junk))
+#endif /* __rtems__ */
 				return (FALSE);
 		} else {
 			if (!xdr_uint32_t(xdrs, &junk))

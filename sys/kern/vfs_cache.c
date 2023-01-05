@@ -339,12 +339,14 @@ cache_out_ts(struct namecache *ncp, struct timespec *tsp, int *ticksp)
 }
 
 static int __read_mostly	doingcache = 1;	/* 1 => enable the cache */
+#ifndef __rtems__
 SYSCTL_INT(_debug, OID_AUTO, vfscache, CTLFLAG_RW, &doingcache, 0,
     "VFS namecache enabled");
 
 /* Export size information to userland */
 SYSCTL_INT(_debug_sizeof, OID_AUTO, namecache, CTLFLAG_RD, SYSCTL_NULL_INT_PTR,
     sizeof(struct namecache), "sizeof(struct namecache)");
+#endif /* __rtems__ */
 
 /*
  * The new name cache statistics
@@ -397,10 +399,12 @@ static void
 cache_maybe_yield(void)
 {
 
+#ifndef __rtems__
 	if (should_yield()) {
 		cache_yield++;
 		kern_yield(PRI_USER);
 	}
+#endif /* __rtems__ */
 }
 
 static inline void
@@ -1918,7 +1922,11 @@ nchinit(void *dummy __unused)
 	numfullpathfail4 = counter_u64_alloc(M_WAITOK);
 	numfullpathfound = counter_u64_alloc(M_WAITOK);
 }
+#ifndef __rtems__
 SYSINIT(vfs, SI_SUB_VFS, SI_ORDER_SECOND, nchinit, NULL);
+#else /* __rtems__ */
+SYSINIT(vfs_c, SI_SUB_VFS, SI_ORDER_SECOND, nchinit, NULL);
+#endif /* __rtems__ */
 
 void
 cache_changesize(int newmaxvnodes)
@@ -2136,6 +2144,7 @@ static int __read_mostly disablecwd;
 SYSCTL_INT(_debug, OID_AUTO, disablecwd, CTLFLAG_RW, &disablecwd, 0,
    "Disable the getcwd syscall");
 
+#ifndef __rtems__
 /* Implementation of the getcwd syscall. */
 int
 sys___getcwd(struct thread *td, struct __getcwd_args *uap)
@@ -2186,6 +2195,7 @@ kern___getcwd(struct thread *td, char *buf, enum uio_seg bufseg, size_t buflen,
 	free(tmpbuf, M_TEMP);
 	return (error);
 }
+#endif /* __rtems__ */
 
 /*
  * Thus begins the fullpath magic.

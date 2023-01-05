@@ -49,17 +49,21 @@ __FBSDID("$FreeBSD$");
 #include <sys/mutex.h>
 #include <sys/module.h>
 #include <sys/sysent.h>
+#ifndef __rtems__
 #include <sys/syscall.h>
+#endif /* __rtems__ */
 #include <sys/sysproto.h>
 
 #include <security/audit/audit.h>
 
 #include <nfs/nfssvc.h>
 
+#ifndef __rtems__
 static struct syscall_helper_data nfssvc_syscalls[] = {
 	SYSCALL_INIT_HELPER(nfssvc),
 	SYSCALL_INIT_LAST
 };
+#endif /* __rtems__ */
 
 /*
  * This tiny module simply handles the nfssvc() system call. The other
@@ -124,8 +128,10 @@ nfssvc_modevent(module_t mod, int type, void *data)
 
 	switch (type) {
 	case MOD_LOAD:
+#ifndef __rtems__
 		error = syscall_helper_register(nfssvc_syscalls,
 		    SY_THR_STATIC_KLD);
+#endif /* __rtems__ */
 		break;
 
 	case MOD_UNLOAD:
@@ -134,7 +140,9 @@ nfssvc_modevent(module_t mod, int type, void *data)
 			error = EBUSY;
 			break;
 		}
+#ifndef __rtems__
 		syscall_helper_unregister(nfssvc_syscalls);
+#endif /* __rtems__ */
 		break;
 	default:
 		error = EOPNOTSUPP;

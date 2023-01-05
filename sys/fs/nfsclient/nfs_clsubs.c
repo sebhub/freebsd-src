@@ -57,7 +57,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/stat.h>
 #include <sys/malloc.h>
 #include <sys/sysent.h>
+#ifndef __rtems__
 #include <sys/syscall.h>
+#endif /* __rtems__ */
 #include <sys/sysproto.h>
 #include <sys/taskqueue.h>
 
@@ -256,8 +258,10 @@ ncl_getattrcache(struct vnode *vp, struct vattr *vaper)
 			vaper->va_mtime = np->n_mtim;
 	}
 	NFSUNLOCKNODE(np);
+#ifndef __rtems__
 	if (setnsize)
 		vnode_pager_setsize(vp, nsize);
+#endif /* __rtems__ */
 	KDTRACE_NFS_ATTRCACHE_GET_HIT(vp, vap);
 	return (0);
 }

@@ -54,7 +54,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/conf.h>
 #include <sys/counter.h>
 #include <sys/buf.h>
+#ifndef __rtems__
 #include <sys/devicestat.h>
+#endif /* __rtems__ */
 #include <sys/eventhandler.h>
 #include <sys/fail.h>
 #include <sys/limits.h>
@@ -85,9 +87,21 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_pager.h>
 #include <vm/vm_extern.h>
 #include <vm/vm_map.h>
+#ifndef __rtems__
 #include <vm/swap_pager.h>
+#endif /* __rtems__ */
 #include "opt_swap.h"
 
+#ifdef __rtems__
+#include <rtems/malloc.h>
+#include <rtems/bsd/bsd.h>
+
+#include <machine/rtems-bsd-page.h>
+
+int bio_transient_maxcnt = 1024;
+long maxbcache;
+static caddr_t unmapped_base;
+#endif /* __rtems__ */
 static MALLOC_DEFINE(M_BIOBUF, "biobuf", "BIO buffer");
 
 struct	bio_ops bioops;		/* I/O operation notification */
@@ -147,7 +161,15 @@ struct bufdomain {
 #define	BD_DOMAIN(bd)		(bd - bdomain)
 
 static struct buf *buf;		/* buffer header pool */
+#ifndef __rtems__
 extern struct buf *swbuf;	/* Swap buffer header pool. */
+#else /* __rtems__ */
+#define VPR_NOREUSE 0
+#define VPR_TRYFREE 0
+#define bogus_page (NULL + 1)
+#define num_pages(x) \
+        ((vm_offset_t)((((vm_offset_t)(x)) + PAGE_MASK) >> PAGE_SHIFT))
+#endif /* __rtems__ */
 caddr_t __read_mostly unmapped_buf;
 
 /* Used below and for softdep flushing threads in ufs/ffs/ffs_softdep.c */
@@ -310,6 +332,9 @@ SYSCTL_COUNTER_U64(_vfs, OID_AUTO, notbufdflushes, CTLFLAG_RD, &notbufdflushes,
 static long barrierwrites;
 SYSCTL_LONG(_vfs, OID_AUTO, barrierwrites, CTLFLAG_RW, &barrierwrites, 0,
     "Number of barrier writes");
+#ifdef __rtems__
+int unmapped_buf_allowed;
+#endif /* __rtems__ */
 SYSCTL_INT(_vfs, OID_AUTO, unmapped_buf_allowed, CTLFLAG_RD,
     &unmapped_buf_allowed, 0,
     "Permit the use of the unmapped i/o");
@@ -791,12 +816,16 @@ bufspace_daemon(void *arg)
 {
 	struct bufdomain *bd;
 
+#ifndef __rtems__
 	EVENTHANDLER_REGISTER(shutdown_pre_sync, kthread_shutdown, curthread,
 	    SHUTDOWN_PRI_LAST + 100);
+#endif /* __rtems__ */
 
 	bd = arg;
 	for (;;) {
+#ifndef __rtems__
 		kthread_suspend_check();
+#endif /* __rtems__ */
 
 		/*
 		 * Free buffers from the clean queue until we meet our
@@ -844,7 +873,9 @@ bufspace_daemon(void *arg)
 				} else
 					BD_UNLOCK(bd);
 			}
+#ifndef __rtems__
 			maybe_yield();
+#endif /* __rtems__ */
 		}
 		bufspace_daemon_wait(bd);
 	}
@@ -953,6 +984,7 @@ static __inline void
 vfs_buf_test_cache(struct buf *bp, vm_ooffset_t foff, vm_offset_t off,
     vm_offset_t size, vm_page_t m)
 {
+#ifndef __rtems__
 
 	VM_OBJECT_ASSERT_LOCKED(m->object);
 	if (bp->b_flags & B_CACHE) {
@@ -960,6 +992,7 @@ vfs_buf_test_cache(struct buf *bp, vm_ooffset_t foff, vm_offset_t off,
 		if (vm_page_is_valid(m, base, size) == 0)
 			bp->b_flags &= ~B_CACHE;
 	}
+#endif /* __rtems__ */
 }
 
 /* Wake up the buffer daemon if necessary */
@@ -1017,9 +1050,11 @@ bd_speedup(void)
 	mtx_unlock(&bdlock);
 }
 
+#ifndef __rtems__
 #ifndef NSWBUF_MIN
 #define	NSWBUF_MIN	16
 #endif
+#endif /* __rtems__ */
 
 #ifdef __i386__
 #define	TRANSIENT_DENOM	5
@@ -1129,6 +1164,7 @@ kern_vfs_bio_buffer_alloc(caddr_t v, long physmem_est)
 			nbuf = buf_sz / BKVASIZE;
 	}
 
+#ifndef __rtems__
 	/*
 	 * swbufs are used as temporary holders for I/O, such as paging I/O.
 	 * We have no less then 16 and no more then 256.
@@ -1137,12 +1173,15 @@ kern_vfs_bio_buffer_alloc(caddr_t v, long physmem_est)
 	TUNABLE_INT_FETCH("kern.nswbuf", &nswbuf);
 	if (nswbuf < NSWBUF_MIN)
 		nswbuf = NSWBUF_MIN;
+#endif /* __rtems__ */
 
 	/*
 	 * Reserve space for the buffer cache buffers
 	 */
+#ifndef __rtems__
 	swbuf = (void *)v;
 	v = (caddr_t)(swbuf + nswbuf);
+#endif /* __rtems__ */
 	buf = (void *)v;
 	v = (caddr_t)(buf + nbuf);
 
@@ -1164,7 +1203,11 @@ bufinit(void)
 	mtx_init(&bdlock, "buffer daemon lock", NULL, MTX_DEF);
 	mtx_init(&bdirtylock, "dirty buf lock", NULL, MTX_DEF);
 
+#ifndef __rtems__
 	unmapped_buf = (caddr_t)kva_alloc(MAXPHYS);
+#else /* __rtems__ */
+	unmapped_buf = (caddr_t)unmapped_base;
+#endif /* __rtems__ */
 
 	/* finally, initialize each buffer header and stick on empty q */
 	for (i = 0; i < nbuf; i++) {
@@ -1252,7 +1295,9 @@ bufinit(void)
 	numfreebuffers = nbuf;
 
 	/* Setup the kva and free list allocators. */
+#ifndef __rtems__
 	vmem_set_reclaim(buffer_arena, bufkva_reclaim);
+#endif /* __rtems__ */
 	buf_zone = uma_zcache_create("buf free cache", sizeof(struct buf),
 	    NULL, NULL, NULL, NULL, buf_import, buf_release, NULL, 0);
 
@@ -1291,6 +1336,22 @@ bufinit(void)
 	bufdefragcnt = counter_u64_alloc(M_WAITOK);
 	bufkvaspace = counter_u64_alloc(M_WAITOK);
 }
+#ifdef __rtems__
+static void
+vfs_bio_init(void *dummy)
+{
+
+	maxbcache = rtems_bsd_get_allocator_domain_size(
+	    RTEMS_BSD_ALLOCATOR_DOMAIN_BIO);
+	unmapped_base = (caddr_t)rtems_heap_allocate_aligned_with_boundary(
+	    maxbcache, CACHE_LINE_SIZE, 0);
+	BSD_ASSERT(unmapped_base != NULL);
+	kern_vfs_bio_buffer_alloc(unmapped_base, maxbcache);
+	bufinit();
+	vm_pager_bufferinit();
+}
+SYSINIT(cpu, SI_SUB_CPU, SI_ORDER_FIRST, vfs_bio_init, NULL);
+#endif /* __rtems__ */
 
 #ifdef INVARIANTS
 static inline void
@@ -1335,6 +1396,7 @@ isbufbusy(struct buf *bp)
 void
 bufshutdown(int show_busybufs)
 {
+#ifndef __rtems__
 	static int first_buf_printf = 1;
 	struct buf *bp;
 	int iter, nbusy, pbusy;
@@ -1441,6 +1503,7 @@ bufshutdown(int show_busybufs)
 	}
 	swapoff_all();
 	DELAY(100000);		/* wait for console output to finish */
+#endif /* __rtems__ */
 }
 
 static void
@@ -1454,7 +1517,9 @@ bpmap_qenter(struct buf *bp)
 	 * bp->b_offset may be offset into the first page.
 	 */
 	bp->b_data = (caddr_t)trunc_page((vm_offset_t)bp->b_data);
+#ifndef __rtems__
 	pmap_qenter((vm_offset_t)bp->b_data, bp->b_pages, bp->b_npages);
+#endif /* __rtems__ */
 	bp->b_data = (caddr_t)((vm_offset_t)bp->b_data |
 	    (vm_offset_t)(bp->b_offset & PAGE_MASK));
 }
@@ -2103,7 +2168,9 @@ breada(struct vnode * vp, daddr_t * rablkno, int * rabsize, int cnt,
 			PROC_UNLOCK(curproc);
 		}
 #endif /* RACCT */
+#ifndef __rtems__
 		td->td_ru.ru_inblock++;
+#endif /* __rtems__ */
 		rabp->b_flags |= B_ASYNC;
 		rabp->b_flags &= ~B_INVAL;
 		if ((flags & GB_CKHASH) != 0) {
@@ -2166,7 +2233,9 @@ breadn_flags(struct vnode *vp, daddr_t blkno, int size, daddr_t *rablkno,
 			PROC_UNLOCK(td->td_proc);
 		}
 #endif /* RACCT */
+#ifndef __rtems__
 		td->td_ru.ru_inblock++;
+#endif /* __rtems__ */
 		bp->b_iocmd = BIO_READ;
 		bp->b_flags &= ~B_INVAL;
 		if ((flags & GB_CKHASH) != 0) {
@@ -2274,7 +2343,9 @@ bufwrite(struct buf *bp)
 		PROC_UNLOCK(curproc);
 	}
 #endif /* RACCT */
+#ifndef __rtems__
 	curthread->td_ru.ru_oublock++;
+#endif /* __rtems__ */
 	if (oldflags & B_ASYNC)
 		BUF_KERNPROC(bp);
 	bp->b_iooffset = dbtob(bp->b_blkno);
@@ -2835,6 +2906,9 @@ out:
 static void
 vfs_vmio_iodone(struct buf *bp)
 {
+#ifdef __rtems__
+  panic(__func__);
+#else /* __rtems__ */
 	vm_ooffset_t foff;
 	vm_page_t m;
 	vm_object_t obj;
@@ -2901,6 +2975,7 @@ vfs_vmio_iodone(struct buf *bp)
 		pmap_qenter(trunc_page((vm_offset_t)bp->b_data),
 		    bp->b_pages, bp->b_npages);
 	}
+#endif /* __rtems__ */
 }
 
 /*
@@ -2916,7 +2991,9 @@ vfs_vmio_invalidate(struct buf *bp)
 
 	if (buf_mapped(bp)) {
 		BUF_CHECK_MAPPED(bp);
+#ifndef __rtems__
 		pmap_qremove(trunc_page((vm_offset_t)bp->b_data), bp->b_npages);
+#endif /* __rtems__ */
 	} else
 		BUF_CHECK_UNMAPPED(bp);
 	/*
@@ -2942,6 +3019,7 @@ vfs_vmio_invalidate(struct buf *bp)
 			panic("vfs_vmio_invalidate: Unexpected bogus page.");
 		bp->b_pages[i] = NULL;
 
+#ifndef __rtems__
 		presid = resid > (PAGE_SIZE - poffset) ?
 		    (PAGE_SIZE - poffset) : resid;
 		KASSERT(presid >= 0, ("brelse: extra page"));
@@ -2954,6 +3032,7 @@ vfs_vmio_invalidate(struct buf *bp)
 		if (pmap_page_wired_mappings(m) == 0)
 			vm_page_set_invalid(m, poffset, presid);
 		vm_page_release_locked(m, flags);
+#endif /* __rtems__ */
 		resid -= presid;
 		poffset = 0;
 	}
@@ -2976,8 +3055,10 @@ vfs_vmio_truncate(struct buf *bp, int desiredpages)
 
 	if (buf_mapped(bp)) {
 		BUF_CHECK_MAPPED(bp);
+#ifndef __rtems__
 		pmap_qremove((vm_offset_t)trunc_page((vm_offset_t)bp->b_data) +
 		    (desiredpages << PAGE_SHIFT), bp->b_npages - desiredpages);
+#endif /* __rtems__ */
 	} else
 		BUF_CHECK_UNMAPPED(bp);
 
@@ -2996,10 +3077,12 @@ vfs_vmio_truncate(struct buf *bp, int desiredpages)
 		m = bp->b_pages[i];
 		KASSERT(m != bogus_page, ("allocbuf: bogus page found"));
 		bp->b_pages[i] = NULL;
+#ifndef __rtems__
 		if (obj != NULL)
 			vm_page_release_locked(m, flags);
 		else
 			vm_page_release(m, flags);
+#endif /* __rtems__ */
 	}
 	if (obj != NULL)
 		VM_OBJECT_WUNLOCK(obj);
@@ -3039,11 +3122,13 @@ vfs_vmio_extend(struct buf *bp, int desiredpages, int size)
 		 * deadlocks once allocbuf() is called after
 		 * pages are vfs_busy_pages().
 		 */
+#ifndef __rtems__
 		(void)vm_page_grab_pages(obj,
 		    OFF_TO_IDX(bp->b_offset) + bp->b_npages,
 		    VM_ALLOC_SYSTEM | VM_ALLOC_IGN_SBUSY |
 		    VM_ALLOC_NOBUSY | VM_ALLOC_WIRED,
 		    &bp->b_pages[bp->b_npages], desiredpages - bp->b_npages);
+#endif /* __rtems__ */
 		bp->b_npages = desiredpages;
 	}
 
@@ -3079,9 +3164,11 @@ vfs_vmio_extend(struct buf *bp, int desiredpages, int size)
 	/*
 	 * Step 3, fixup the KVA pmap.
 	 */
+#ifdef __rtems__
 	if (buf_mapped(bp))
 		bpmap_qenter(bp);
 	else
+#endif /* __rtems__ */
 		BUF_CHECK_UNMAPPED(bp);
 }
 
@@ -3178,9 +3265,13 @@ vfs_bio_awrite(struct buf *bp)
 		 */
 		if (ncl != 1) {
 			BUF_UNLOCK(bp);
+#ifndef __rtems__
 			nwritten = cluster_wbuild(vp, size, lblkno - j, ncl,
 			    gbflags);
 			return (nwritten);
+#else /* __rtems__ */
+			panic("no cluster support");
+#endif /* __rtems__ */
 		}
 	}
 	bremfree(bp);
@@ -3330,8 +3421,10 @@ buf_daemon()
 	/*
 	 * This process needs to be suspended prior to shutdown sync.
 	 */
+#ifndef __rtems__
 	EVENTHANDLER_REGISTER(shutdown_pre_sync, kthread_shutdown, curthread,
 	    SHUTDOWN_PRI_LAST + 100);
+#endif /* __rtems__ */
 
 	/*
 	 * Start the buf clean daemons as children threads.
@@ -3354,7 +3447,9 @@ buf_daemon()
 		bd_request = 0;
 		mtx_unlock(&bdlock);
 
+#ifndef __rtems__
 		kthread_suspend_check();
+#endif /* __rtems__ */
 
 		/*
 		 * Save speedupreq for this pass and reset to capture new
@@ -3453,7 +3548,9 @@ flushbufqueues(struct vnode *lvp, struct bufdomain *bd, int target,
 	TAILQ_INSERT_HEAD(&bq->bq_queue, sentinel, b_freelist);
 	BQ_UNLOCK(bq);
 	while (flushed != target) {
+#ifndef __rtems__
 		maybe_yield();
+#endif /* __rtems__ */
 		BQ_LOCK(bq);
 		bp = TAILQ_NEXT(sentinel, b_freelist);
 		if (bp != NULL) {
@@ -3532,9 +3629,13 @@ flushbufqueues(struct vnode *lvp, struct bufdomain *bd, int target,
 		if (error == 0) {
 			CTR3(KTR_BUF, "flushbufqueue(%p) vp %p flags %X",
 			    bp, bp->b_vp, bp->b_flags);
+#ifndef __rtems__
 			if (curproc == bufdaemonproc) {
 				vfs_bio_awrite(bp);
 			} else {
+#else /* __rtems__ */
+			{
+#endif /* __rtems__ */
 				bremfree(bp);
 				bwrite(bp);
 				counter_u64_add(notbufdflushes, 1);
@@ -3549,7 +3650,11 @@ flushbufqueues(struct vnode *lvp, struct bufdomain *bd, int target,
 			 * Sleeping on runningbufspace while holding
 			 * vnode lock leads to deadlock.
 			 */
+#ifndef __rtems__
 			if (curproc == bufdaemonproc &&
+#else /* __rtems__ */
+			if (
+#endif /* __rtems__ */
 			    runningbufspace > hirunningspace)
 				waitrunningbufspace();
 			continue;
@@ -3587,6 +3692,7 @@ incore(struct bufobj *bo, daddr_t blkno)
 static int
 inmem(struct vnode * vp, daddr_t blkno)
 {
+#ifndef __rtems__
 	vm_object_t obj;
 	vm_offset_t toff, tinc, size;
 	vm_page_t m;
@@ -3625,6 +3731,9 @@ inmem(struct vnode * vp, daddr_t blkno)
 notinmem:
 	VM_OBJECT_RUNLOCK(obj);
 	return (0);
+#else /* __rtems__ */
+	return 1;
+#endif /* __rtems__ */
 }
 
 /*
@@ -3672,6 +3781,7 @@ vfs_clean_pages_dirty_buf(struct buf *bp)
 static void
 vfs_setdirty_locked_object(struct buf *bp)
 {
+#ifndef __rtems__
 	vm_object_t object;
 	int i;
 
@@ -3730,6 +3840,7 @@ vfs_setdirty_locked_object(struct buf *bp)
 				bp->b_dirtyend = eoffset;
 		}
 	}
+#endif /* __rtems__ */
 }
 
 /*
@@ -4470,6 +4581,7 @@ bufdone(struct buf *bp)
 void
 vfs_unbusy_pages(struct buf *bp)
 {
+#ifndef __rtems__
 	int i;
 	vm_object_t obj;
 	vm_page_t m;
@@ -4498,6 +4610,7 @@ vfs_unbusy_pages(struct buf *bp)
 	}
 	vm_object_pip_wakeupn(obj, bp->b_npages);
 	VM_OBJECT_WUNLOCK(obj);
+#endif /* __rtems__ */
 }
 
 /*
@@ -4511,6 +4624,7 @@ vfs_unbusy_pages(struct buf *bp)
 static void
 vfs_page_set_valid(struct buf *bp, vm_ooffset_t off, vm_page_t m)
 {
+#ifndef __rtems__
 	vm_ooffset_t eoff;
 
 	/*
@@ -4529,6 +4643,7 @@ vfs_page_set_valid(struct buf *bp, vm_ooffset_t off, vm_page_t m)
 	 */
 	if (eoff > off)
 		vm_page_set_valid_range(m, off & PAGE_MASK, eoff - off);
+#endif /* __rtems__ */
 }
 
 /*
@@ -4540,6 +4655,7 @@ vfs_page_set_valid(struct buf *bp, vm_ooffset_t off, vm_page_t m)
 static void
 vfs_page_set_validclean(struct buf *bp, vm_ooffset_t off, vm_page_t m)
 {
+#ifndef __rtems__
 	vm_ooffset_t soff, eoff;
 
 	/*
@@ -4564,6 +4680,7 @@ vfs_page_set_validclean(struct buf *bp, vm_ooffset_t off, vm_page_t m)
 		   (vm_offset_t) (eoff - soff)
 		);
 	}
+#endif /* __rtems__ */
 }
 
 /*
@@ -4573,6 +4690,7 @@ vfs_page_set_validclean(struct buf *bp, vm_ooffset_t off, vm_page_t m)
 void
 vfs_drain_busy_pages(struct buf *bp)
 {
+#ifndef __rtems__
 	vm_page_t m;
 	int i, last_busied;
 
@@ -4593,6 +4711,7 @@ vfs_drain_busy_pages(struct buf *bp)
 	}
 	for (i = 0; i < last_busied; i++)
 		vm_page_sunbusy(bp->b_pages[i]);
+#endif /* __rtems__ */
 }
 
 /*
@@ -4610,6 +4729,7 @@ vfs_drain_busy_pages(struct buf *bp)
 void
 vfs_busy_pages(struct buf *bp, int clear_modify)
 {
+#ifndef __rtems__
 	vm_object_t obj;
 	vm_ooffset_t foff;
 	vm_page_t m;
@@ -4666,6 +4786,7 @@ vfs_busy_pages(struct buf *bp, int clear_modify)
 		pmap_qenter(trunc_page((vm_offset_t)bp->b_data),
 		    bp->b_pages, bp->b_npages);
 	}
+#endif /* __rtems__ */
 }
 
 /*
@@ -4679,6 +4800,7 @@ vfs_busy_pages(struct buf *bp, int clear_modify)
 void   
 vfs_bio_set_valid(struct buf *bp, int base, int size)
 {
+#ifndef __rtems__
 	int i, n;
 	vm_page_t m;
 
@@ -4704,6 +4826,7 @@ vfs_bio_set_valid(struct buf *bp, int base, int size)
 		n = PAGE_SIZE;
 	}
 	VM_OBJECT_WUNLOCK(bp->b_bufobj->bo_object);
+#endif /* __rtems__ */
 }
 
 /*
@@ -4721,12 +4844,15 @@ vfs_bio_set_valid(struct buf *bp, int base, int size)
 void
 vfs_bio_clrbuf(struct buf *bp) 
 {
+#ifndef __rtems__
 	int i, j, mask, sa, ea, slide;
+#endif /* __rtems__ */
 
 	if ((bp->b_flags & (B_VMIO | B_MALLOC)) != B_VMIO) {
 		clrbuf(bp);
 		return;
 	}
+#ifndef __rtems__
 	bp->b_flags &= ~B_INVAL;
 	bp->b_ioflags &= ~BIO_ERROR;
 	VM_OBJECT_WLOCK(bp->b_bufobj->bo_object);
@@ -4773,6 +4899,7 @@ vfs_bio_clrbuf(struct buf *bp)
 unlock:
 	VM_OBJECT_WUNLOCK(bp->b_bufobj->bo_object);
 	bp->b_resid = 0;
+#endif /* __rtems__ */
 }
 
 void
@@ -4785,6 +4912,7 @@ vfs_bio_bzero_buf(struct buf *bp, int base, int size)
 		BUF_CHECK_MAPPED(bp);
 		bzero(bp->b_data + base, size);
 	} else {
+#ifndef __rtems__
 		BUF_CHECK_UNMAPPED(bp);
 		n = PAGE_SIZE - (base & PAGE_MASK);
 		for (i = base / PAGE_SIZE; size > 0 && i < bp->b_npages; ++i) {
@@ -4796,6 +4924,7 @@ vfs_bio_bzero_buf(struct buf *bp, int base, int size)
 			size -= n;
 			n = PAGE_SIZE;
 		}
+#endif /* __rtems__ */
 	}
 }
 
@@ -4848,6 +4977,7 @@ vfs_bio_set_flags(struct buf *bp, int ioflag)
 static void
 vm_hold_load_pages(struct buf *bp, vm_offset_t from, vm_offset_t to)
 {
+#ifndef __rtems__
 	vm_offset_t pg;
 	vm_page_t p;
 	int index;
@@ -4871,12 +5001,14 @@ vm_hold_load_pages(struct buf *bp, vm_offset_t from, vm_offset_t to)
 		bp->b_pages[index] = p;
 	}
 	bp->b_npages = index;
+#endif /* __rtems__ */
 }
 
 /* Return pages associated with this buf to the vm system */
 static void
 vm_hold_free_pages(struct buf *bp, int newbsize)
 {
+#ifndef __rtems__
 	vm_offset_t from;
 	vm_page_t p;
 	int index, newnpages;
@@ -4895,6 +5027,7 @@ vm_hold_free_pages(struct buf *bp, int newbsize)
 	}
 	vm_wire_sub(bp->b_npages - newnpages);
 	bp->b_npages = newnpages;
+#endif /* __rtems__ */
 }
 
 /*
@@ -4914,6 +5047,7 @@ vm_hold_free_pages(struct buf *bp, int newbsize)
 int
 vmapbuf(struct buf *bp, int mapbuf)
 {
+#ifndef __rtems__
 	vm_prot_t prot;
 	int pidx;
 
@@ -4933,6 +5067,7 @@ vmapbuf(struct buf *bp, int mapbuf)
 		bp->b_data = bp->b_kvabase + bp->b_offset;
 	} else
 		bp->b_data = unmapped_buf;
+#endif /* __rtems__ */
 	return(0);
 }
 
@@ -4945,6 +5080,7 @@ vmapbuf(struct buf *bp, int mapbuf)
 void
 vunmapbuf(struct buf *bp)
 {
+#ifndef __rtems__
 	int npages;
 
 	npages = bp->b_npages;
@@ -4953,6 +5089,7 @@ vunmapbuf(struct buf *bp)
 	vm_page_unhold_pages(bp->b_pages, npages);
 
 	bp->b_data = unmapped_buf;
+#endif /* __rtems__ */
 }
 
 void
@@ -5136,6 +5273,7 @@ vfs_bio_getpages(struct vnode *vp, vm_page_t *ma, int count,
     int *rbehind, int *rahead, vbg_get_lblkno_t get_lblkno,
     vbg_get_blksize_t get_blksize)
 {
+#ifndef __rtems__
 	vm_page_t m;
 	vm_object_t object;
 	struct buf *bp;
@@ -5282,11 +5420,23 @@ end_pages:
 		goto again;
 	VM_OBJECT_WUNLOCK(object);
 	return (error != 0 ? VM_PAGER_ERROR : VM_PAGER_OK);
+#else /* __rtems__ */
+	return (0);
+#endif /* __rtems__ */
 }
 
 #include "opt_ddb.h"
+#ifdef __rtems__
+#define DB_SHOW_COMMAND(cmd_name, func_name) \
+   void rtems_bsd_cmd_ ## func_name(caddr_t addr, bool have_addr, int count, char* modif)
+#define db_printf printf
+#define db_show_buffer rtems_bsd_cmd_db_show_buffer
+#define DDB
+#endif /* __rtems__ */
 #ifdef DDB
+#ifndef __rtems__
 #include <ddb/ddb.h>
+#endif /* __rtems__ */
 
 /* DDB command to show buffer data */
 DB_SHOW_COMMAND(buffer, db_show_buffer)
@@ -5322,9 +5472,13 @@ DB_SHOW_COMMAND(buffer, db_show_buffer)
 			vm_page_t m;
 			m = bp->b_pages[i];
 			if (m != NULL)
+#ifndef __rtems__
 				db_printf("(%p, 0x%lx, 0x%lx)", m->object,
 				    (u_long)m->pindex,
 				    (u_long)VM_PAGE_TO_PHYS(m));
+#else /* __rtems__ */
+				db_printf("(%p)", m);
+#endif /* __rtems__ */
 			else
 				db_printf("( ??? )");
 			if ((i + 1) < bp->b_npages)
@@ -5421,8 +5575,10 @@ DB_SHOW_COMMAND(lockedbufs, lockedbufs)
 		if (BUF_ISLOCKED(bp)) {
 			db_show_buffer((uintptr_t)bp, 1, 0, NULL);
 			db_printf("\n");
+#ifndef __rtems__
 			if (db_pager_quit)
 				break;
+#endif /* __rtems__ */
 		}
 	}
 }
@@ -5449,6 +5605,7 @@ DB_SHOW_COMMAND(vnodebufs, db_show_vnodebufs)
 	}
 }
 
+#ifndef __rtems__
 DB_COMMAND(countfreebufs, db_coundfreebufs)
 {
 	struct buf *bp;
@@ -5471,4 +5628,11 @@ DB_COMMAND(countfreebufs, db_coundfreebufs)
 	    nfree + used);
 	db_printf("numfreebuffers is %d\n", numfreebuffers);
 }
+#endif /* __rtems__ */
 #endif /* DDB */
+#ifdef __rtems__
+void rtems_bsd_bio_dump(void)
+{
+  rtems_bsd_cmd_bufqueues(0, true, 0, NULL);
+}
+#endif /* __rtems__ */

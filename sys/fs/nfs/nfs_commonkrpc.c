@@ -62,7 +62,9 @@ __FBSDID("$FreeBSD$");
 #include <rpc/rpc.h>
 #include <rpc/krpc.h>
 
+#ifndef __rtems__
 #include <kgssapi/krb5/kcrypto.h>
+#endif /* __rtems__ */
 
 #include <fs/nfs/nfsport.h>
 
@@ -1275,6 +1277,7 @@ nfs_sig_pending(sigset_t set)
 void
 newnfs_set_sigmask(struct thread *td, sigset_t *oldset)
 {
+#ifndef __rtems__
 	sigset_t newset;
 	int i;
 	struct proc *p;
@@ -1301,14 +1304,17 @@ newnfs_set_sigmask(struct thread *td, sigset_t *oldset)
 	kern_sigprocmask(td, SIG_SETMASK, &newset, oldset,
 	    SIGPROCMASK_PROC_LOCKED);
 	PROC_UNLOCK(p);
+#endif /* __rtems__ */
 }
 
 void
 newnfs_restore_sigmask(struct thread *td, sigset_t *set)
 {
+#ifndef __rtems__
 	if (td == NULL)
 		td = curthread; /* XXX */
 	kern_sigprocmask(td, SIG_SETMASK, set, NULL, 0);
+#endif /* __rtems__ */
 }
 
 /*
@@ -1338,6 +1344,7 @@ newnfs_msleep(struct thread *td, void *ident, struct mtx *mtx, int priority, cha
 int
 newnfs_sigintr(struct nfsmount *nmp, struct thread *td)
 {
+#ifndef __rtems__
 	struct proc *p;
 	sigset_t tmpset;
 	
@@ -1362,6 +1369,7 @@ newnfs_sigintr(struct nfsmount *nmp, struct thread *td)
 		return (EINTR);
 	}
 	PROC_UNLOCK(p);
+#endif /* __rtems__ */
 	return (0);
 }
 

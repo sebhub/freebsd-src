@@ -796,16 +796,22 @@ sys_mount(struct thread *td, struct mount_args *uap)
 	 */
 	flags &= ~MNT_ROOTFS;
 
+#ifndef __rtems__
 	fstype = malloc(MFSNAMELEN, M_TEMP, M_WAITOK);
 	error = copyinstr(uap->type, fstype, MFSNAMELEN, NULL);
 	if (error) {
 		free(fstype, M_TEMP);
 		return (error);
 	}
+#else /* __rtems__ */
+	fstype = uap->type;
+#endif /* __rtems__ */
 
 	AUDIT_ARG_TEXT(fstype);
 	vfsp = vfs_byname_kld(fstype, td, &error);
+#ifndef __rtems__
 	free(fstype, M_TEMP);
+#endif /* __rtems__ */
 	if (vfsp == NULL)
 		return (ENOENT);
 	if (vfsp->vfc_vfsops->vfs_cmount == NULL)
@@ -942,7 +948,9 @@ vfs_domount_first(
 	VOP_UNLOCK(vp, 0);
 	EVENTHANDLER_DIRECT_INVOKE(vfs_mounted, mp, newdp, td);
 	VOP_UNLOCK(newdp, 0);
+#ifndef __rtems__
 	mountcheckdirs(vp, newdp);
+#endif /* __rtems__ */
 	vrele(newdp);
 	if ((mp->mnt_flag & MNT_RDONLY) == 0)
 		vfs_allocate_syncvnode(mp);

@@ -106,6 +106,7 @@ vmcounter_startup(void)
 }
 SYSINIT(counter, SI_SUB_KMEM, SI_ORDER_FIRST, vmcounter_startup, NULL);
 
+#ifndef __rtems__
 SYSCTL_UINT(_vm, VM_V_FREE_MIN, v_free_min,
 	CTLFLAG_RW, &vm_cnt.v_free_min, 0, "Minimum low-free-pages threshold");
 SYSCTL_UINT(_vm, VM_V_FREE_TARGET, v_free_target,
@@ -559,3 +560,4 @@ vm_stats_init(void *arg __unused)
 }
 
 SYSINIT(vmstats_init, SI_SUB_VM_CONF, SI_ORDER_FIRST, vm_stats_init, NULL);
+#endif /* __rtems__ */

@@ -50,6 +50,9 @@ __FBSDID("$FreeBSD$");
 #include <fs/nfs/nfsport.h>
 #include <sys/sysctl.h>
 #include <sys/taskqueue.h>
+#ifdef __rtems__
+#include <rtems/version.h>
+#endif /* __rtems__ */
 
 SYSCTL_DECL(_vfs_nfs);
 
@@ -2959,41 +2962,57 @@ nfsrpc_readdir(vnode_t vp, struct uio *uiop, nfsuint64 *cookiep,
 			    return (error);
 			nd->nd_mrep = NULL;
 			dp = (struct dirent *)uio_iov_base(uiop);
+#ifndef __rtems__
 			dp->d_pad0 = dp->d_pad1 = 0;
+#endif /* __rtems__ */
 			dp->d_off = 0;
 			dp->d_type = DT_DIR;
 			dp->d_fileno = dotfileid;
 			dp->d_namlen = 1;
+#ifndef __rtems__
 			*((uint64_t *)dp->d_name) = 0;	/* Zero pad it. */
+#else /* __rtems__ */
+			dp->d_name[1] = '\0';
+#endif /* __rtems__ */
 			dp->d_name[0] = '.';
 			dp->d_reclen = _GENERIC_DIRSIZ(dp) + NFSX_HYPER;
 			/*
 			 * Just make these offset cookie 0.
 			 */
+#ifndef __rtems__
 			tl = (u_int32_t *)&dp->d_name[8];
 			*tl++ = 0;
 			*tl = 0;
+#endif /* __rtems__ */
 			blksiz += dp->d_reclen;
 			uio_uio_resid_add(uiop, -(dp->d_reclen));
 			uiop->uio_offset += dp->d_reclen;
 			uio_iov_base_add(uiop, dp->d_reclen);
 			uio_iov_len_add(uiop, -(dp->d_reclen));
 			dp = (struct dirent *)uio_iov_base(uiop);
+#ifndef __rtems__
 			dp->d_pad0 = dp->d_pad1 = 0;
+#endif /* __rtems__ */
 			dp->d_off = 0;
 			dp->d_type = DT_DIR;
 			dp->d_fileno = dotdotfileid;
 			dp->d_namlen = 2;
+#ifndef __rtems__
 			*((uint64_t *)dp->d_name) = 0;
+#else /* __rtems__ */
+			dp->d_name[2] = '\0';
+#endif /* __rtems__ */
 			dp->d_name[0] = '.';
 			dp->d_name[1] = '.';
 			dp->d_reclen = _GENERIC_DIRSIZ(dp) + NFSX_HYPER;
 			/*
 			 * Just make these offset cookie 0.
 			 */
+#ifndef __rtems__
 			tl = (u_int32_t *)&dp->d_name[8];
 			*tl++ = 0;
 			*tl = 0;
+#endif /* __rtems__ */
 			blksiz += dp->d_reclen;
 			uio_uio_resid_add(uiop, -(dp->d_reclen));
 			uiop->uio_offset += dp->d_reclen;
@@ -3106,7 +3125,9 @@ nfsrpc_readdir(vnode_t vp, struct uio *uiop, nfsuint64 *cookiep,
 				bigenough = 0;
 			if (bigenough) {
 				dp = (struct dirent *)uio_iov_base(uiop);
+#ifndef __rtems__
 				dp->d_pad0 = dp->d_pad1 = 0;
+#endif /* __rtems__ */
 				dp->d_off = 0;
 				dp->d_namlen = len;
 				dp->d_reclen = _GENERIC_DIRLEN(len) +
@@ -3127,6 +3148,10 @@ nfsrpc_readdir(vnode_t vp, struct uio *uiop, nfsuint64 *cookiep,
 				NFSBZERO(cp, tlen);
 				cp += tlen;	/* points to cookie storage */
 				tl2 = (u_int32_t *)cp;
+#ifdef __rtems__
+				tlen = dp->d_reclen -
+					(((char*) uio_iov_base(uiop) - (char*) dp) + NFSX_HYPER);
+#endif /* __rtems__ */
 				uio_iov_base_add(uiop, (tlen + NFSX_HYPER));
 				uio_iov_len_add(uiop, -(tlen + NFSX_HYPER));
 				uio_uio_resid_add(uiop, -(tlen + NFSX_HYPER));
@@ -3181,10 +3206,23 @@ nfsrpc_readdir(vnode_t vp, struct uio *uiop, nfsuint64 *cookiep,
 			    } else {
 				dp->d_fileno = nfsva.na_fileid;
 			    }
+#ifndef __rtems__
 			    *tl2++ = cookiep->nfsuquad[0] = cookie.lval[0] =
 				ncookie.lval[0];
+#else /* __rtems__ */
+			    memcpy(tl2, &ncookie.lval[0], sizeof(*tl2));
+			    tl2++;
+			    cookiep->nfsuquad[0] = cookie.lval[0] =
+				ncookie.lval[0];
+#endif /* __rtems__ */
+#ifndef __rtems__
 			    *tl2 = cookiep->nfsuquad[1] = cookie.lval[1] =
 				ncookie.lval[1];
+#else /* __rtems__ */
+			    memcpy(tl2, &ncookie.lval[1], sizeof(*tl2));
+			    cookiep->nfsuquad[1] = cookie.lval[1] =
+				ncookie.lval[1];
+#endif /* __rtems__ */
 			}
 			more_dirs = fxdr_unsigned(int, *tl);
 		}
@@ -3242,9 +3280,14 @@ nfsrpc_readdir(vnode_t vp, struct uio *uiop, nfsuint64 *cookiep,
 		dp = (struct dirent *)uio_iov_base(uiop);
 		NFSBZERO(dp, DIRBLKSIZ);
 		dp->d_type = DT_UNKNOWN;
+#ifndef __rtems__
 		tl = (u_int32_t *)&dp->d_name[4];
 		*tl++ = cookie.lval[0];
 		*tl = cookie.lval[1];
+#else /* __rtems__ */
+		memcpy(&dp->d_name[8], &cookie.lval[0], sizeof(u_int32_t));
+		memcpy(&dp->d_name[8 + sizeof(u_int32_t)], &cookie.lval[1], sizeof(u_int32_t));
+#endif /* __rtems__ */
 		dp->d_reclen = DIRBLKSIZ;
 		uio_iov_base_add(uiop, DIRBLKSIZ);
 		uio_iov_len_add(uiop, -(DIRBLKSIZ));
@@ -3396,41 +3439,61 @@ nfsrpc_readdirplus(vnode_t vp, struct uio *uiop, nfsuint64 *cookiep,
 			    return (error);
 			nd->nd_mrep = NULL;
 			dp = (struct dirent *)uio_iov_base(uiop);
+#ifndef __rtems__
 			dp->d_pad0 = dp->d_pad1 = 0;
+#endif /* __rtems__ */
 			dp->d_off = 0;
 			dp->d_type = DT_DIR;
 			dp->d_fileno = dotfileid;
 			dp->d_namlen = 1;
+#ifndef __rtems__
 			*((uint64_t *)dp->d_name) = 0;	/* Zero pad it. */
+#else /* __rtems__ */
+			dp->d_name[0] = dp->d_name[1] = dp->d_name[2] = dp->d_name[3] = '\0';
+#endif /* __rtems__ */
 			dp->d_name[0] = '.';
 			dp->d_reclen = _GENERIC_DIRSIZ(dp) + NFSX_HYPER;
 			/*
 			 * Just make these offset cookie 0.
 			 */
+#ifndef __rtems__
 			tl = (u_int32_t *)&dp->d_name[8];
 			*tl++ = 0;
 			*tl = 0;
+#else /* __rtems__ */
+			memset(&dp->d_name[8], 0, 2 * sizeof(u_int32_t));
+#endif /* __rtems__ */
 			blksiz += dp->d_reclen;
 			uio_uio_resid_add(uiop, -(dp->d_reclen));
 			uiop->uio_offset += dp->d_reclen;
 			uio_iov_base_add(uiop, dp->d_reclen);
 			uio_iov_len_add(uiop, -(dp->d_reclen));
 			dp = (struct dirent *)uio_iov_base(uiop);
+#ifndef __rtems__
 			dp->d_pad0 = dp->d_pad1 = 0;
+#endif /* __rtems__ */
 			dp->d_off = 0;
 			dp->d_type = DT_DIR;
 			dp->d_fileno = dotdotfileid;
 			dp->d_namlen = 2;
+#ifndef __rtems__
 			*((uint64_t *)dp->d_name) = 0;
+#else /* __rtems__ */
+			dp->d_name[0] = dp->d_name[1] = dp->d_name[2] = dp->d_name[3] = '\0';
+#endif /* __rtems__ */
 			dp->d_name[0] = '.';
 			dp->d_name[1] = '.';
 			dp->d_reclen = _GENERIC_DIRSIZ(dp) + NFSX_HYPER;
 			/*
 			 * Just make these offset cookie 0.
 			 */
+#ifndef __rtems__
 			tl = (u_int32_t *)&dp->d_name[8];
 			*tl++ = 0;
 			*tl = 0;
+#else /* __rtems__ */
+			memset(&dp->d_name[8], 0, 2 * sizeof(u_int32_t));
+#endif /* __rtems__ */
 			blksiz += dp->d_reclen;
 			uio_uio_resid_add(uiop, -(dp->d_reclen));
 			uiop->uio_offset += dp->d_reclen;
@@ -3524,7 +3587,9 @@ nfsrpc_readdirplus(vnode_t vp, struct uio *uiop, nfsuint64 *cookiep,
 				bigenough = 0;
 			if (bigenough) {
 				dp = (struct dirent *)uio_iov_base(uiop);
+#ifndef __rtems__
 				dp->d_pad0 = dp->d_pad1 = 0;
+#endif /* __rtems__ */
 				dp->d_off = 0;
 				dp->d_namlen = len;
 				dp->d_reclen = _GENERIC_DIRLEN(len) +
@@ -3745,9 +3810,14 @@ nfsrpc_readdirplus(vnode_t vp, struct uio *uiop, nfsuint64 *cookiep,
 		dp = (struct dirent *)uio_iov_base(uiop);
 		NFSBZERO(dp, DIRBLKSIZ);
 		dp->d_type = DT_UNKNOWN;
+#ifndef __rtems__
 		tl = (u_int32_t *)&dp->d_name[4];
 		*tl++ = cookie.lval[0];
 		*tl = cookie.lval[1];
+#else /* __rtems__ */
+		memcpy(&dp->d_name[8], &cookie.lval[0], sizeof(u_int32_t));
+		memcpy(&dp->d_name[8 + sizeof(u_int32_t)], &cookie.lval[1], sizeof(u_int32_t));
+#endif /* __rtems__ */
 		dp->d_reclen = DIRBLKSIZ;
 		uio_iov_base_add(uiop, DIRBLKSIZ);
 		uio_iov_len_add(uiop, -(DIRBLKSIZ));
@@ -4670,8 +4740,16 @@ nfsrpc_exchangeid(struct nfsmount *nmp, struct nfsclclient *clp,
 
 	/* Set the implementation id4 */
 	*tl = txdr_unsigned(1);
+#ifndef __rtems__
 	(void) nfsm_strtom(nd, "freebsd.org", strlen("freebsd.org"));
 	(void) nfsm_strtom(nd, version, strlen(version));
+#else /* __rtems__ */
+	{
+	  const char* rv = rtems_version();
+	  (void) nfsm_strtom(nd, "rtems.org", strlen("rtems.org"));
+	  (void) nfsm_strtom(nd, rv, strlen(rv));
+	}
+#endif /* __rtems__ */
 	NFSM_BUILD(tl, uint32_t *, NFSX_V4TIME);
 	verstime.tv_sec = 1293840000;		/* Jan 1, 2011 */
 	verstime.tv_nsec = 0;

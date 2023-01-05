@@ -181,8 +181,10 @@ svc_getcred(struct svc_req *rqst, struct ucred **crp, int *flavorp)
 		cr->cr_uid = cr->cr_ruid = cr->cr_svuid = xcr->cr_uid;
 		crsetgroups(cr, xcr->cr_ngroups, xcr->cr_groups);
 		cr->cr_rgid = cr->cr_svgid = cr->cr_groups[0];
+#ifndef __rtems__
 		cr->cr_prison = &prison0;
 		prison_hold(cr->cr_prison);
+#endif /* __rtems__ */
 		*crp = cr;
 		return (TRUE);
 

@@ -51,7 +51,9 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#ifndef __rtems__
 #include <sys/acct.h>
+#endif /* __rtems__ */
 #include <sys/kdb.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
@@ -65,13 +67,19 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysent.h>
 #include <sys/sysproto.h>
 #include <sys/jail.h>
+#ifndef __rtems__
 #include <sys/pioctl.h>
+#endif /* __rtems__ */
 #include <sys/racct.h>
+#ifndef __rtems__
 #include <sys/rctl.h>
+#endif /* __rtems__ */
 #include <sys/resourcevar.h>
 #include <sys/socket.h>
 #include <sys/socketvar.h>
+#ifndef __rtems__
 #include <sys/syscallsubr.h>
+#endif /* __rtems__ */
 #include <sys/sysctl.h>
 
 #ifdef REGRESSION
@@ -79,11 +87,14 @@ FEATURE(regression,
     "Kernel support for interfaces necessary for regression testing (SECURITY RISK!)");
 #endif
 
+#ifndef __rtems__
 #include <security/audit/audit.h>
 #include <security/mac/mac_framework.h>
+#endif /* __rtems__ */
 
 static MALLOC_DEFINE(M_CRED, "cred", "credentials");
 
+#ifndef __rtems__
 SYSCTL_NODE(_security, OID_AUTO, bsd, CTLFLAG_RW, 0, "BSD security policy");
 
 static void crsetgroups_locked(struct ucred *cr, int ngrp,
@@ -1260,6 +1271,7 @@ sys___setugid(struct thread *td, struct __setugid_args *uap)
 	return (ENOSYS);
 #endif /* REGRESSION */
 }
+#endif /* __rtems__ */
 
 /*
  * Check if gid is a member of the group set.
@@ -1294,6 +1306,7 @@ groupmember(gid_t gid, struct ucred *cred)
 	return (0);
 }
 
+#ifndef __rtems__
 /*
  * Test the active securelevel against a given level.  securelevel_gt()
  * implements (securelevel > level).  securelevel_ge() implements
@@ -1807,6 +1820,7 @@ p_canwait(struct thread *td, struct proc *p)
 
 	return (0);
 }
+#endif /* __rtems__ */
 
 /*
  * Allocate a zeroed cred structure.
@@ -1837,6 +1851,10 @@ struct ucred *
 crhold(struct ucred *cr)
 {
 
+#ifdef __rtems__
+	if (cr == NULL)
+		return (cr);
+#endif /* __rtems__ */
 	refcount_acquire(&cr->cr_ref);
 	return (cr);
 }
@@ -1847,6 +1865,10 @@ crhold(struct ucred *cr)
 void
 crfree(struct ucred *cr)
 {
+#ifdef __rtems__
+	if (cr == NULL)
+		return;
+#endif /* __rtems__ */
 
 	KASSERT(cr->cr_ref > 0, ("bad ucred refcount: %d", cr->cr_ref));
 	KASSERT(cr->cr_ref != 0xdeadc0de, ("dangling reference to ucred"));
@@ -1863,6 +1885,7 @@ crfree(struct ucred *cr)
 		/*
 		 * Free a prison, if any.
 		 */
+#ifndef __rtems__
 		if (cr->cr_prison != NULL)
 			prison_free(cr->cr_prison);
 		if (cr->cr_loginclass != NULL)
@@ -1873,6 +1896,7 @@ crfree(struct ucred *cr)
 #ifdef MAC
 		mac_cred_destroy(cr);
 #endif
+#endif /* __rtems__ */
 		if (cr->cr_groups != cr->cr_smallgroups)
 			free(cr->cr_groups, M_CRED);
 		free(cr, M_CRED);
@@ -1885,6 +1909,10 @@ crfree(struct ucred *cr)
 void
 crcopy(struct ucred *dest, struct ucred *src)
 {
+#ifdef __rtems__
+	if (dest == NULL || src == NULL)
+		return;
+#endif /* __rtems__ */
 
 	KASSERT(dest->cr_ref == 1, ("crcopy of shared ucred"));
 	bcopy(&src->cr_startcopy, &dest->cr_startcopy,
@@ -1893,6 +1921,7 @@ crcopy(struct ucred *dest, struct ucred *src)
 	crsetgroups(dest, src->cr_ngroups, src->cr_groups);
 	uihold(dest->cr_uidinfo);
 	uihold(dest->cr_ruidinfo);
+#ifndef __rtems__
 	prison_hold(dest->cr_prison);
 	loginclass_hold(dest->cr_loginclass);
 #ifdef AUDIT
@@ -1901,6 +1930,7 @@ crcopy(struct ucred *dest, struct ucred *src)
 #ifdef MAC
 	mac_cred_copy(src, dest);
 #endif
+#endif /* __rtems__ */
 }
 
 /*
@@ -1911,6 +1941,10 @@ crdup(struct ucred *cr)
 {
 	struct ucred *newcr;
 
+#ifdef __rtems__
+	if (cr == NULL)
+		return NULL;
+#endif /* __rtems__ */
 	newcr = crget();
 	crcopy(newcr, cr);
 	return (newcr);
@@ -1934,6 +1968,7 @@ cru2x(struct ucred *cr, struct xucred *xcr)
 	    ngroups * sizeof(*cr->cr_groups));
 }
 
+#ifndef __rtems__
 /*
  * Set initial process credentials.
  * Callers are responsible for providing the reference for provided credentials.
@@ -1993,6 +2028,7 @@ crcopysafe(struct proc *p, struct ucred *cr)
 
 	return (oldcred);
 }
+#endif /* __rtems__ */
 
 /*
  * Extend the passed in credential to hold n items.
@@ -2083,6 +2119,7 @@ crsetgroups(struct ucred *cr, int ngrp, gid_t *groups)
 	crsetgroups_locked(cr, ngrp, groups);
 }
 
+#ifndef __rtems__
 /*
  * Get login name, if available.
  */
@@ -2157,6 +2194,7 @@ setsugid(struct proc *p)
 	if (!(p->p_pfsflags & PF_ISUGID))
 		p->p_stops = 0;
 }
+#endif /* __rtems__ */
 
 /*-
  * Change a process's effective uid.
