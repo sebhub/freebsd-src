@@ -165,7 +165,9 @@ struct ucom_softc {
 	const struct ucom_callback *sc_callback;
 	struct ucom_super_softc *sc_super;
 	struct tty *sc_tty;
+#ifndef __rtems__
 	struct consdev *sc_consdev;
+#endif /* __rtems__ */
 	struct mtx *sc_mtx;
 	void   *sc_parent;
 	int sc_subunit;

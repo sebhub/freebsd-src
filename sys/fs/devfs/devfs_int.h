@@ -60,10 +60,12 @@ struct cdev_priv {
 #define CDP_SCHED_DTR		(1 << 1)
 #define	CDP_UNREF_DTR		(1 << 2)
 
+#ifndef __rtems__
 	u_int			cdp_inuse;
 	u_int			cdp_maxdirent;
 	struct devfs_dirent	**cdp_dirents;
 	struct devfs_dirent	*cdp_dirent0;
+#endif /* __rtems__ */
 
 	TAILQ_ENTRY(cdev_priv)	cdp_dtr_list;
 	void			(*cdp_dtr_cb)(void *);
@@ -92,6 +94,10 @@ extern struct mtx devfs_de_interlock;
 extern struct sx clone_drain_lock;
 extern struct mtx cdevpriv_mtx;
 extern TAILQ_HEAD(cdev_priv_list, cdev_priv) cdevp_list;
+#ifdef __rtems__
+struct rtems_libio_tt;
+void devfs_fpdrop(struct rtems_libio_tt *);
+#endif /* __rtems__ */
 
 #endif /* _KERNEL */
 

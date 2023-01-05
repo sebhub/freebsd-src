@@ -128,6 +128,7 @@ uuid_time(void)
 	return (time & ((1LL << 60) - 1LL));
 }
 
+#ifndef __rtems__
 struct uuid *
 kern_uuidgen(struct uuid *store, size_t count)
 {
@@ -198,6 +199,7 @@ sys_uuidgen(struct thread *td, struct uuidgen_args *uap)
 	free(store, M_TEMP);
 	return (error);
 }
+#endif /* __rtems__ */
 
 int
 uuid_ether_add(const uint8_t *addr)

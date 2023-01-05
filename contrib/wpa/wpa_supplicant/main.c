@@ -17,6 +17,14 @@
 #include "driver_i.h"
 #include "p2p_supplicant.h"
 
+#ifdef __rtems__
+#define __need_getopt_newlib
+#include <getopt.h>
+#include <assert.h>
+#include <sys/mutex.h>
+#include <machine/rtems-bsd-program.h>
+#include <machine/rtems-bsd-wpa-supplicant.h>
+#endif /* __rtems__ */
 
 static void usage(void)
 {
@@ -178,6 +186,23 @@ static int wpa_supplicant_init_match(struct wpa_global *global)
 #endif /* CONFIG_MATCH_IFACE */
 
 
+#ifdef __rtems__
+#include <rtems/libio.h>
+
+static int main(int argc, char *argv[]);
+
+int
+rtems_bsd_command_wpa_supplicant(int argc, char **argv)
+{
+	int exit_code;
+
+	rtems_bsd_wpa_supplicant_lock();
+	exit_code = rtems_bsd_program_call_main("wpa_supplicant", main,
+	    argc, argv);
+	rtems_bsd_wpa_supplicant_unlock();
+	return (exit_code);
+}
+#endif /* __rtems__ */
 int main(int argc, char *argv[])
 {
 	int c, i;
@@ -185,6 +210,15 @@ int main(int argc, char *argv[])
 	int iface_count, exitcode = -1;
 	struct wpa_params params;
 	struct wpa_global *global;
+#ifdef __rtems__
+	struct getopt_data getopt_data;
+	memset(&getopt_data, 0, sizeof(getopt_data));
+#define optind getopt_data.optind
+#define optarg getopt_data.optarg
+#define opterr getopt_data.opterr
+#define optopt getopt_data.optopt
+#define getopt(argc, argv, opt) getopt_r(argc, argv, "+" opt, &getopt_data)
+#endif /* __rtems__ */
 
 	if (os_program_init())
 		return -1;

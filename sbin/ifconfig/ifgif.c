@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
  *
@@ -30,6 +34,9 @@ static const char rcsid[] =
   "$FreeBSD$";
 #endif
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -52,6 +59,9 @@ static const char rcsid[] =
 #include <errno.h>
 
 #include "ifconfig.h"
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-ifgif-data.h"
+#endif /* __rtems__ */
 
 #define	GIFBITS	"\020\2IGNORE_SOURCE"
 
@@ -104,7 +114,11 @@ static struct afswtch af_gif = {
 	.af_other_status = gif_status,
 };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+void
+#endif /* __rtems__ */
 gif_ctor(void)
 {
 	size_t i;

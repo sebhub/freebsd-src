@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-openssl-namespace.h"
+#endif /* __rtems__ */
+
 /*
  * Copyright 1995-2019 The OpenSSL Project Authors. All Rights Reserved.
  *
@@ -879,6 +884,9 @@ static void print_chain_flags(SSL *s, int flags)
         BIO_printf(bio_err, "not tested\n");
 }
 
+#ifdef __rtems__
+    static int retry_cnt;
+#endif /* __rtems__ */
 /*
  * Very basic selection callback: just use any certificate chain reported as
  * valid. More sophisticated could prioritise according to local policy.
@@ -888,7 +896,9 @@ static int set_cert_cb(SSL *ssl, void *arg)
     int i, rv;
     SSL_EXCERT *exc = arg;
 #ifdef CERT_CB_TEST_RETRY
+#ifndef __rtems__
     static int retry_cnt;
+#endif /* __rtems__ */
     if (retry_cnt < 5) {
         retry_cnt++;
         BIO_printf(bio_err,
@@ -1536,3 +1546,6 @@ void print_ca_names(BIO *bio, SSL *s)
         BIO_write(bio, "\n", 1);
     }
 }
+#ifdef __rtems__
+#include "rtems-bsd-openssl-s_cb-data.h"
+#endif /* __rtems__ */

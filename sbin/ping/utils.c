@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ping-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -47,6 +51,9 @@ static char sccsid[] = "@(#)ping.c	8.1 (Berkeley) 6/5/93";
 __FBSDID("$FreeBSD$");
 
 #include <string.h>
+#ifdef __rtems__
+#include "rtems-bsd-ping-utils-data.h"
+#endif /* __rtems__ */
 
 #include "utils.h"
 

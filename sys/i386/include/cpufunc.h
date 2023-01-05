@@ -56,11 +56,13 @@ struct region_descriptor;
 
 #if defined(__GNUCLIKE_ASM) && defined(__CC_SUPPORTS___INLINE)
 
+#ifndef __rtems__
 static __inline void
 breakpoint(void)
 {
 	__asm __volatile("int $3");
 }
+#endif
 
 static __inline __pure2 u_int
 bsfl(u_int mask)
@@ -195,6 +197,7 @@ sfence(void)
 
 #ifdef _KERNEL
 
+#ifndef __rtems__
 #define	HAVE_INLINE_FFS
 
 static __inline __pure2 int
@@ -218,20 +221,25 @@ ffsl(long mask)
 }
 
 #define	HAVE_INLINE_FLS
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 static __inline __pure2 int
 fls(int mask)
 {
 	return (mask == 0 ? mask : (int)bsrl((u_int)mask) + 1);
 }
+#endif
 
 #define	HAVE_INLINE_FLSL
 
+#ifndef __rtems__
 static __inline __pure2 int
 flsl(long mask)
 {
 	return (fls((int)mask));
 }
+#endif /* __rtems__ */
 
 #endif /* _KERNEL */
 
@@ -710,6 +718,7 @@ write_cyrix_reg(u_char reg, u_char data)
 	outb(0x23, data);
 }
 
+#ifndef __rtems__
 static __inline register_t
 intr_disable(void)
 {
@@ -725,6 +734,7 @@ intr_restore(register_t eflags)
 {
 	write_eflags(eflags);
 }
+#endif /* __rtems__ */
 
 static __inline uint32_t
 rdpkru(void)
@@ -744,7 +754,9 @@ wrpkru(uint32_t mask)
 
 #else /* !(__GNUCLIKE_ASM && __CC_SUPPORTS___INLINE) */
 
+#ifndef __rtems__
 int	breakpoint(void);
+#endif
 u_int	bsfl(u_int mask);
 u_int	bsrl(u_int mask);
 void	clflush(u_long addr);

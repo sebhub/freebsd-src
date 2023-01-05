@@ -46,6 +46,7 @@
 #ifndef _MACHINE_CPUFUNC_H_
 #define _MACHINE_CPUFUNC_H_
 
+#ifndef __rtems__
 #ifdef _KERNEL
 
 #include <sys/types.h>
@@ -373,6 +374,7 @@ breakpoint(void)
 }
 
 #endif	/* _KERNEL */
+#endif /* __rtems__ */
 #endif	/* _MACHINE_CPUFUNC_H_ */
 
 /* End of cpufunc.h */

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * This module implements decoding of OpenFlow protocol version 1.0 (wire
  * protocol 0x01). The decoder implements terse (default), detailed (-v) and
@@ -2558,3 +2562,6 @@ trunc:
 	ND_PRINT((ndo, "%s", tstr));
 	return ep;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-openflow-1.0-data.h"
+#endif /* __rtems__ */

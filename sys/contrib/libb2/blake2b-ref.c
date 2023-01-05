@@ -16,6 +16,9 @@
 #include <stdio.h>
 
 #include "blake2.h"
+#ifdef __rtems__
+#define	SUFFIX _ref
+#endif /* __rtems__ */
 #include "blake2-impl.h"
 
 static const uint64_t blake2b_IV[8] =

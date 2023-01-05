@@ -172,7 +172,11 @@ gre_clone_create(struct if_clone *ifc, int unit, caddr_t params)
 	struct gre_softc *sc;
 
 	sc = malloc(sizeof(struct gre_softc), M_GRE, M_WAITOK | M_ZERO);
+#ifndef __rtems__
 	sc->gre_fibnum = curthread->td_proc->p_fibnum;
+#else /* __rtems__ */
+	sc->gre_fibnum = BSD_DEFAULT_FIB;
+#endif /* __rtems__ */
 	GRE2IFP(sc) = if_alloc(IFT_TUNNEL);
 	GRE2IFP(sc)->if_softc = sc;
 	if_initname(GRE2IFP(sc), grename, unit);

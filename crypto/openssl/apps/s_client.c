@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-openssl-namespace.h"
+#endif /* __rtems__ */
+
 /*
  * Copyright 1995-2019 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright 2005 Nokia. All rights reserved.
@@ -502,9 +507,23 @@ struct tlsa_field {
     ossl_ssize_t (*parser)(const char **, void *);
 };
 
+#ifdef __rtems__
+static uint8_t usage;
+static uint8_t selector;
+static uint8_t mtype;
+static unsigned char *data;
+static struct tlsa_field tlsa_fields[] = {
+    { &usage, "usage", checked_uint8 },
+    { &selector, "selector", checked_uint8 },
+    { &mtype, "mtype", checked_uint8 },
+    { &data, "data", hexdecode },
+    { NULL, }
+};
+#endif /* __rtems__ */
 static int tlsa_import_rr(SSL *con, const char *rrdata)
 {
     /* Not necessary to re-init these values; the "parsers" do that. */
+#ifndef __rtems__
     static uint8_t usage;
     static uint8_t selector;
     static uint8_t mtype;
@@ -516,6 +535,7 @@ static int tlsa_import_rr(SSL *con, const char *rrdata)
         { &data, "data", hexdecode },
         { NULL, }
     };
+#endif /* __rtems__ */
     struct tlsa_field *f;
     int ret;
     const char *cp = rrdata;
@@ -2632,6 +2652,9 @@ int s_client_main(int argc, char **argv)
     case PROTO_LDAP:
         {
             /* StartTLS Operation according to RFC 4511 */
+#ifdef __rtems__
+            const
+#endif /* __rtems__ */
             static char ldap_tls_genconf[] = "asn1=SEQUENCE:LDAPMessage\n"
                 "[LDAPMessage]\n"
                 "messageID=INTEGER:1\n"
@@ -2948,6 +2971,9 @@ int s_client_main(int argc, char **argv)
         } else if (ssl_pending || FD_ISSET(SSL_get_fd(con), &readfds)) {
 #ifdef RENEG
             {
+#ifdef __rtems__
+#error FIXME: Make a global static variable out of this.
+#endif /* __rtems__ */
                 static int iiii;
                 if (++iiii == 52) {
                     SSL_renegotiate(con);
@@ -3542,3 +3568,6 @@ static int is_dNS_name(const char *host)
     return isdnsname;
 }
 #endif                          /* OPENSSL_NO_SOCK */
+#ifdef __rtems__
+#include "rtems-bsd-openssl-s_client-data.h"
+#endif /* __rtems__ */

@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#define RTEMS_BSD_PROGRAM_NO_ERROR_WRAP
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 2000
  *	The Regents of the University of California.  All rights reserved.
@@ -25,11 +30,13 @@
  *	Seth Webster <swebster@sst.ll.mit.edu>
  */
 
+#ifndef __rtems__
 #ifndef lint
 static const char copyright[] _U_ =
     "@(#) Copyright (c) 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 2000\n\
 The Regents of the University of California.  All rights reserved.\n";
 #endif
+#endif /* __rtems__ */
 
 /*
  * tcpdump - dump traffic on a network
@@ -66,6 +73,9 @@ The Regents of the University of California.  All rights reserved.\n";
 #include <openssl/crypto.h>
 #endif
 
+#ifdef __rtems__
+#define __need_getopt_newlib
+#endif /* __rtems__ */
 #ifdef HAVE_GETOPT_LONG
 #include <getopt.h>
 #else
@@ -123,6 +133,15 @@ The Regents of the University of California.  All rights reserved.\n";
 #include "ascii_strcasecmp.h"
 
 #include "print.h"
+#ifdef __rtems__
+#include <sys/sysctl.h>
+#include <machine/rtems-bsd-commands.h>
+#include <assert.h>
+#include <sched.h>
+#include <rtems.h>
+#include <rtems/linkersets.h>
+#define setpriority(a, b, c)
+#endif /* __rtems__ */
 
 #ifndef PATH_MAX
 #define PATH_MAX 1024
@@ -150,6 +169,9 @@ static int Dflag;			/* list available devices and exit */
  * dflag but, instead, *if* built with optimizer debugging code,
  * *export* a routine to set that flag.
  */
+#ifdef __rtems__
+static
+#endif /* __rtems__ */
 int dflag;				/* print filter code */
 static int Gflag;			/* rotate dump files after this many seconds */
 static int Gflag_count;			/* number of files created with Gflag rotation */
@@ -183,8 +205,10 @@ cap_channel_t *capdns;
 static void error(FORMAT_STRING(const char *), ...) NORETURN PRINTFLIKE(1, 2);
 static void warning(FORMAT_STRING(const char *), ...) PRINTFLIKE(1, 2);
 static void exit_tcpdump(int) NORETURN;
+#ifndef __rtems__
 static RETSIGTYPE cleanup(int);
 static RETSIGTYPE child_cleanup(int);
+#endif /* __rtems__ */
 static void print_version(void);
 static void print_usage(void);
 static void show_tstamp_types_and_exit(pcap_t *, const char *device) NORETURN;
@@ -196,6 +220,7 @@ static void show_devices_and_exit (void) NORETURN;
 static void print_packet(u_char *, const struct pcap_pkthdr *, const u_char *);
 static void dump_packet_and_trunc(u_char *, const struct pcap_pkthdr *, const u_char *);
 static void dump_packet(u_char *, const struct pcap_pkthdr *, const u_char *);
+#ifndef __rtems__
 static void droproot(const char *, const char *);
 
 #ifdef SIGNAL_REQ_INFO
@@ -209,6 +234,7 @@ RETSIGTYPE requestinfo(int);
 #elif defined(HAVE_ALARM)
   static void verbose_stats_dump(int sig);
 #endif
+#endif /* __rtems__ */
 
 static void info(int);
 static u_int packets_captured;
@@ -230,9 +256,18 @@ static pcap_t *pd;
 
 static int supports_monitor_mode;
 
+#ifndef __rtems__
 extern int optind;
 extern int opterr;
 extern char *optarg;
+#else /* __rtems__ */
+#define optind getopt_data.optind
+#define optarg getopt_data.optarg
+#define opterr getopt_data.opterr
+#define optopt getopt_data.optopt
+#define getopt_long(argc, argv, so, lo, i) \
+    getopt_long_r(argc, argv, so, lo, i, &getopt_data)
+#endif /* __rtems__ */
 
 struct dump_info {
 	char	*WFileName;
@@ -591,6 +626,7 @@ static const struct option longopts[] = {
 	{ NULL, 0, NULL, 0 }
 };
 
+#ifndef __rtems__
 #ifndef _WIN32
 /* Drop root privileges and chroot if necessary */
 static void
@@ -655,6 +691,7 @@ droproot(const char *username, const char *chroot_dir)
 
 }
 #endif /* _WIN32 */
+#endif /* __rtems__ */
 
 static int
 getWflagChars(int x)
@@ -1135,8 +1172,121 @@ open_interface(const char *device, netdissect_options *ndo, char *ebuf)
 	return (pc);
 }
 
+#ifdef __rtems__
+static int main(int argc, char **argv);
+
+RTEMS_LINKER_RWSET(bsd_prog_tcpdump, char);
+
 int
+rtems_bsd_command_tcpdump(int argc, char *argv[])
+{
+	int exit_code;
+	void *data_begin;
+	size_t data_size;
+
+	data_begin = RTEMS_LINKER_SET_BEGIN(bsd_prog_tcpdump);
+	data_size = RTEMS_LINKER_SET_SIZE(bsd_prog_tcpdump);
+
+	rtems_bsd_program_lock();
+	exit_code = rtems_bsd_program_call_main_with_data_restore("tcpdump",
+	    main, argc, argv, data_begin, data_size);
+	rtems_bsd_program_unlock();
+
+	return (exit_code);
+}
+
+typedef struct {
+	FILE *in;
+	pcap_t *pd;
+	rtems_id master;
+	bool terminate;
+} pcap_loop_context;
+
+static void
+pcap_loop_monitor(rtems_task_argument arg)
+{
+	const pcap_loop_context *ctx;
+	FILE *in;
+	pcap_t *pd;
+	rtems_status_code sc;
+
+	ctx = (const pcap_loop_context *)arg;
+	in = ctx->in;
+	pd = ctx->pd;
+
+	while (!ctx->terminate) {
+		int c;
+
+		c = fgetc(in);
+
+		if (c == '\r' || c == '\n' || c == 'q' || c == 'Q') {
+			pcap_breakloop(pd);
+			break;
+		}
+
+		sched_yield();
+	}
+
+	sc = rtems_event_transient_send(ctx->master);
+	assert(sc == RTEMS_SUCCESSFUL);
+
+	rtems_task_exit();
+}
+
+static void
+pcap_create_loop_monitor(pcap_loop_context *ctx, pcap_t *pd)
+{
+	rtems_status_code sc;
+	rtems_task_priority priority;
+	rtems_id id;
+
+	sc = rtems_task_set_priority(RTEMS_SELF, RTEMS_CURRENT_PRIORITY,
+	    &priority);
+	assert(sc == RTEMS_SUCCESSFUL);
+
+	sc = rtems_task_create(rtems_build_name('T', 'C', 'P', 'D'), priority,
+	    RTEMS_MINIMUM_STACK_SIZE, RTEMS_DEFAULT_MODES,
+	    RTEMS_DEFAULT_ATTRIBUTES, &id);
+	if (sc != RTEMS_SUCCESSFUL) {
+		error("cannot create pcap loop monitor thread: %s\n",
+		    rtems_status_text(sc));
+	}
+
+	fprintf(stdout, "tcpdump: press <ENTER> or 'q' or 'Q' to quit\n");
+
+	ctx->in = stdin;
+	ctx->pd = pd;
+	ctx->master = rtems_task_self();
+	ctx->terminate = false;
+	sc = rtems_task_start(id, pcap_loop_monitor,
+	    (rtems_task_argument)ctx);
+	assert(sc == RTEMS_SUCCESSFUL);
+}
+
+static void
+pcap_terminate_loop_monitor(pcap_loop_context *ctx)
+{
+	rtems_status_code sc;
+
+	ctx->terminate = true;
+
+	sc = rtems_event_transient_receive(RTEMS_WAIT, RTEMS_NO_TIMEOUT);
+	assert(sc == RTEMS_SUCCESSFUL);
+}
+
+static void
+destroy_pcap_dumper(void *arg)
+{
+
+	pcap_dump_close(arg);
+}
+#endif /* __rtems__ */
+int
+#ifndef __rtems__
+main(int argc, char *const *argv)
+#else /* __rtems__ */
 main(int argc, char **argv)
+#endif /* __rtems__ */
 {
 	register int cnt, op, i;
 	bpf_u_int32 localnet =0 , netmask = 0;
@@ -1146,15 +1296,19 @@ main(int argc, char **argv)
 	int dlt;
 	const char *dlt_name;
 	struct bpf_program fcode;
+#ifndef __rtems__
 #ifndef _WIN32
 	RETSIGTYPE (*oldhandler)(int);
 #endif
+#endif /* __rtems__ */
 	struct dump_info dumpinfo;
 	u_char *pcap_userdata;
 	char ebuf[PCAP_ERRBUF_SIZE];
 	char VFileLine[PATH_MAX + 1];
+#ifndef __rtems__
 	char *username = NULL;
 	char *chroot_dir = NULL;
+#endif /* __rtems__ */
 	char *ret = NULL;
 	char *end;
 #ifdef HAVE_PCAP_FINDALLDEVS
@@ -1170,6 +1324,10 @@ main(int argc, char **argv)
 	int Oflag = 1;			/* run filter code optimizer */
 	int yflag_dlt = -1;
 	const char *yflag_dlt_name = NULL;
+#ifdef __rtems__
+	struct getopt_data getopt_data;
+	memset(&getopt_data, 0, sizeof(getopt_data));
+#endif /* __rtems__ */
 
 	netdissect_options Ndo;
 	netdissect_options *ndo = &Ndo;
@@ -1522,9 +1680,11 @@ main(int argc, char **argv)
 			zflag = optarg;
 			break;
 
+#ifndef __rtems__
 		case 'Z':
 			username = optarg;
 			break;
+#endif /* __rtems__ */
 
 		case '#':
 			ndo->ndo_packet_number = 1;
@@ -1821,6 +1981,7 @@ main(int argc, char **argv)
 
 	init_print(ndo, localnet, netmask, timezone_offset);
 
+#ifndef __rtems__
 #ifndef _WIN32
 	(void)setsignal(SIGPIPE, cleanup);
 	(void)setsignal(SIGTERM, cleanup);
@@ -1888,6 +2049,7 @@ main(int argc, char **argv)
 
 	}
 #endif /* _WIN32 */
+#endif /* __rtems__ */
 
 	if (pcap_setfilter(pd, &fcode) < 0)
 		error("%s", pcap_geterr(pd));
@@ -1982,6 +2144,12 @@ main(int argc, char **argv)
 		if (Uflag)
 			pcap_dump_flush(p);
 #endif
+#ifdef __rtems__
+		if (rtems_bsd_program_add_destructor(destroy_pcap_dumper, p) ==
+		    NULL) {
+			error("cannot add destructor");
+		}
+#endif /* __rtems__ */
 	} else {
 		dlt = pcap_datalink(pd);
 		ndo->ndo_if_printer = get_if_printer(ndo, dlt);
@@ -1989,6 +2157,7 @@ main(int argc, char **argv)
 		pcap_userdata = (u_char *)ndo;
 	}
 
+#ifndef __rtems__
 #ifdef SIGNAL_REQ_INFO
 	/*
 	 * We can't get statistics when reading from a file rather
@@ -2013,6 +2182,7 @@ main(int argc, char **argv)
 		alarm(1);
 #endif
 	}
+#endif /* __rtems__ */
 
 	if (RFileName == NULL) {
 		/*
@@ -2055,7 +2225,19 @@ main(int argc, char **argv)
 #endif	/* HAVE_CAPSICUM */
 
 	do {
+#ifdef __rtems__
+		pcap_loop_context ctx;
+
+		if (RFileName == NULL) {
+			pcap_create_loop_monitor(&ctx, pd);
+		}
+#endif /* __rtems__ */
 		status = pcap_loop(pd, cnt, callback, pcap_userdata);
+#ifdef __rtems__
+		if (RFileName == NULL) {
+			pcap_terminate_loop_monitor(&ctx);
+		}
+#endif /* __rtems__ */
 		if (WFileName == NULL) {
 			/*
 			 * We're printing packets.  Flush the printed output,
@@ -2174,6 +2356,7 @@ main(int argc, char **argv)
 	exit_tcpdump(status == -1 ? 1 : 0);
 }
 
+#ifndef __rtems__
 /* make a clean exit on interrupts */
 static RETSIGTYPE
 cleanup(int signo _U_)
@@ -2226,6 +2409,7 @@ child_cleanup(int signo _U_)
   wait(NULL);
 }
 #endif /* HAVE_FORK && HAVE_VFORK */
+#endif /* __rtems__ */
 
 static void
 info(register int verbose)
@@ -2586,6 +2770,7 @@ print_packet(u_char *user, const struct pcap_pkthdr *h, const u_char *sp)
 	char Wpcap_version[]="3.1";
 #endif
 
+#ifndef __rtems__
 #ifdef SIGNAL_REQ_INFO
 RETSIGTYPE requestinfo(int signo _U_)
 {
@@ -2614,12 +2799,17 @@ static void verbose_stats_dump(int sig _U_)
 	alarm(1);
 }
 #endif
+#endif /* __rtems__ */
 
 USES_APPLE_DEPRECATED_API
 static void
 print_version(void)
 {
+#ifdef __rtems__
+#define version "RTEMS Version"
+#else /* __rtems__ */
 	extern char version[];
+#endif /* __rtems__ */
 #ifndef HAVE_PCAP_LIB_VERSION
 #if defined(_WIN32) || defined(HAVE_PCAP_VERSION)
 	extern char pcap_version[];
@@ -2700,3 +2890,6 @@ print_usage(void)
  * c-basic-offset: 8
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-tcpdump-data.h"
+#endif /* __rtems__ */

@@ -437,7 +437,9 @@ struct mbuf {
  * External mbuf storage buffer types.
  */
 #define	EXT_CLUSTER	1	/* mbuf cluster */
+#ifndef __rtems__
 #define	EXT_SFBUF	2	/* sendfile(2)'s sf_buf */
+#endif /* __rtems__ */
 #define	EXT_JUMBOP	3	/* jumbo cluster page sized */
 #define	EXT_JUMBO9	4	/* jumbo cluster 9216 bytes */
 #define	EXT_JUMBO16	5	/* jumbo cluster 16184 bytes */
@@ -701,7 +703,7 @@ m_extaddref(struct mbuf *m, char *buf, u_int size, u_int *ref_cnt,
 
 	KASSERT(ref_cnt != NULL, ("%s: ref_cnt not provided", __func__));
 
-	atomic_add_int(ref_cnt, 1);
+	atomic_add_int((int*)ref_cnt, 1);
 	m->m_flags |= M_EXT;
 	m->m_ext.ext_buf = buf;
 	m->m_ext.ext_cnt = ref_cnt;
@@ -776,7 +778,7 @@ m_get(int how, short type)
 
 	args.flags = 0;
 	args.type = type;
-	m = uma_zalloc_arg(zone_mbuf, &args, how);
+	m = (struct mbuf *)uma_zalloc_arg(zone_mbuf, &args, how);
 	MBUF_PROBE3(m__get, how, type, m);
 	return (m);
 }
@@ -789,7 +791,7 @@ m_gethdr(int how, short type)
 
 	args.flags = M_PKTHDR;
 	args.type = type;
-	m = uma_zalloc_arg(zone_mbuf, &args, how);
+	m = (struct mbuf *)uma_zalloc_arg(zone_mbuf, &args, how);
 	MBUF_PROBE3(m__gethdr, how, type, m);
 	return (m);
 }
@@ -802,7 +804,7 @@ m_getcl(int how, short type, int flags)
 
 	args.flags = flags;
 	args.type = type;
-	m = uma_zalloc_arg(zone_pack, &args, how);
+	m = (struct mbuf *)uma_zalloc_arg(zone_pack, &args, how);
 	MBUF_PROBE4(m__getcl, how, type, flags, m);
 	return (m);
 }
@@ -837,8 +839,9 @@ m_cljset(struct mbuf *m, void *cl, int type)
 		break;
 	}
 
-	m->m_data = m->m_ext.ext_buf = cl;
-	m->m_ext.ext_free = m->m_ext.ext_arg1 = m->m_ext.ext_arg2 = NULL;
+	m->m_data = m->m_ext.ext_buf = (caddr_t)cl;
+	m->m_ext.ext_free = NULL;
+	m->m_ext.ext_arg1 = m->m_ext.ext_arg2 = NULL;
 	m->m_ext.ext_size = size;
 	m->m_ext.ext_type = type;
 	m->m_ext.ext_flags = EXT_FLAG_EMBREF;

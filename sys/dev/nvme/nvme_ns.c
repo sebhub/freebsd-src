@@ -47,6 +47,7 @@ __FBSDID("$FreeBSD$");
 
 #include "nvme_private.h"
 
+#ifndef __rtems__
 static void		nvme_bio_child_inbed(struct bio *parent, int bio_error);
 static void		nvme_bio_child_done(void *arg,
 					    const struct nvme_completion *cpl);
@@ -61,6 +62,7 @@ static struct bio **	nvme_construct_child_bios(struct bio *bp,
 static int		nvme_ns_split_bio(struct nvme_namespace *ns,
 					  struct bio *bp,
 					  uint32_t alignment);
+#endif /* __rtems__ */
 
 static int
 nvme_ns_ioctl(struct cdev *cdev, u_long cmd, caddr_t arg, int flag,
@@ -74,10 +76,12 @@ nvme_ns_ioctl(struct cdev *cdev, u_long cmd, caddr_t arg, int flag,
 	ctrlr = ns->ctrlr;
 
 	switch (cmd) {
+#ifndef __rtems__
 	case NVME_IO_TEST:
 	case NVME_BIO_TEST:
 		nvme_ns_test(ns, cmd, arg);
 		break;
+#endif /* __rtems__ */
 	case NVME_PASSTHROUGH_CMD:
 		pt = (struct nvme_pt_command *)arg;
 		return (nvme_ctrlr_passthrough_cmd(ctrlr, pt, ns->id, 
@@ -90,6 +94,11 @@ nvme_ns_ioctl(struct cdev *cdev, u_long cmd, caddr_t arg, int flag,
 		gnsid->nsid = ns->id;
 		break;
 	}
+#ifdef __rtems__
+	case NVME_GET_NAMESPACE:
+		*(struct nvme_namespace **)arg = ns;
+		break;
+#endif /* __rtems__ */
 	case DIOCGMEDIASIZE:
 		*(off_t *)arg = (off_t)nvme_ns_get_size(ns);
 		break;
@@ -123,6 +132,7 @@ nvme_ns_close(struct cdev *dev __unused, int flags, int fmt __unused,
 	return (0);
 }
 
+#ifndef __rtems__
 static void
 nvme_ns_strategy_done(void *arg, const struct nvme_completion *cpl)
 {
@@ -159,15 +169,20 @@ nvme_ns_strategy(struct bio *bp)
 	}
 
 }
+#endif /* __rtems__ */
 
 static struct cdevsw nvme_ns_cdevsw = {
 	.d_version =	D_VERSION,
 	.d_flags =	D_DISK,
+#ifndef __rtems__
 	.d_read =	physread,
 	.d_write =	physwrite,
+#endif /* __rtems__ */
 	.d_open =	nvme_ns_open,
 	.d_close =	nvme_ns_close,
+#ifndef __rtems__
 	.d_strategy =	nvme_ns_strategy,
+#endif /* __rtems__ */
 	.d_ioctl =	nvme_ns_ioctl
 };
 
@@ -238,6 +253,7 @@ nvme_ns_get_stripesize(struct nvme_namespace *ns)
 	return (ns->boundary);
 }
 
+#ifndef __rtems__
 static void
 nvme_ns_bio_done(void *arg, const struct nvme_completion *status)
 {
@@ -494,6 +510,7 @@ nvme_ns_bio_process(struct nvme_namespace *ns, struct bio *bp,
 
 	return (err);
 }
+#endif /* __rtems__ */
 
 int
 nvme_ns_ioctl_process(struct nvme_namespace *ns, u_long cmd, caddr_t arg,

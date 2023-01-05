@@ -2860,12 +2860,14 @@ ip_mroute_modevent(module_t mod, int type, void *unused)
 	VIF_LOCK_INIT();
 
 	mfchashsize = MFCHASHSIZE;
+#ifndef __rtems__
 	if (TUNABLE_ULONG_FETCH("net.inet.ip.mfchashsize", &mfchashsize) &&
 	    !powerof2(mfchashsize)) {
 		printf("WARNING: %s not a power of 2; using default\n",
 		    "net.inet.ip.mfchashsize");
 		mfchashsize = MFCHASHSIZE;
 	}
+#endif /* __rtems__ */
 
 	pim_squelch_wholepkt = 0;
 	TUNABLE_ULONG_FETCH("net.inet.pim.squelch_wholepkt",

@@ -64,6 +64,7 @@ __FBSDID("$FreeBSD$");
 #include <vm/uma.h>
 #include <ddb/ddb.h>
 
+#ifndef __rtems__
 static MALLOC_DEFINE(M_PCPU, "Per-cpu", "Per-cpu resource accouting.");
 
 struct dpcpu_free {
@@ -128,6 +129,7 @@ dpcpu_startup(void *dummy __unused)
 	sx_init(&dpcpu_lock, "dpcpu alloc lock");
 }
 SYSINIT(dpcpu, SI_SUB_KLD, SI_ORDER_FIRST, dpcpu_startup, NULL);
+#endif /* __rtems__ */
 
 /*
  * UMA_PCPU_ZONE zones, that are available for all kernel
@@ -153,6 +155,7 @@ pcpu_zones_startup(void)
 }
 SYSINIT(pcpu_zones, SI_SUB_VM, SI_ORDER_ANY, pcpu_zones_startup, NULL);
 
+#ifndef __rtems__
 /*
  * First-fit extent based allocator for allocating space in the per-cpu
  * region reserved for modules.  This is only intended for use by the
@@ -419,3 +422,4 @@ DB_SHOW_ALL_COMMAND(pcpu, db_show_cpu_all)
 }
 DB_SHOW_ALIAS(allpcpu, db_show_cpu_all);
 #endif
+#endif /* __rtems__ */

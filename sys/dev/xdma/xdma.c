@@ -52,10 +52,13 @@ __FBSDID("$FreeBSD$");
 #include <dev/ofw/ofw_bus.h>
 #include <dev/ofw/ofw_bus_subr.h>
 #endif
+#ifdef __rtems__
+#define IN_XDMA_C
+#endif /* __rtems__ */
 
 #include <dev/xdma/xdma.h>
 
-#include <xdma_if.h>
+#include "xdma_if.h"
 
 /*
  * Multiple xDMA controllers may work with single DMA device,

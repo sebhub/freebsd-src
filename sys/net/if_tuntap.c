@@ -124,7 +124,9 @@ struct tuntap_softc {
 #define	TUN_DRIVER_IDENT_MASK	(TUN_L2 | TUN_VMNET)
 #define	TUN_READY		(TUN_OPEN | TUN_INITED)
 
+#ifndef __rtems__
 	pid_t			 tun_pid;	/* owning pid */
+#endif /* __rtems__ */
 	struct ifnet		*tun_ifp;	/* the interface */
 	struct sigio		*tun_sigio;	/* async I/O info */
 	struct tuntap_driver	*tun_drv;	/* appropriate driver */
@@ -1073,7 +1075,9 @@ tunopen(struct cdev *dev, int flag, int mode, struct thread *td)
 			ifp->if_flags |= IFF_UP;
 	}
 
+#ifndef __rtems__
 	tp->tun_pid = td->td_proc->p_pid;
+#endif /* __rtems__ */
 	tp->tun_flags |= TUN_OPEN;
 
 	if_link_state_change(ifp, LINK_STATE_UP);
@@ -1099,17 +1103,22 @@ tunopen(struct cdev *dev, int flag, int mode, struct thread *td)
 static void
 tundtor(void *data)
 {
+#ifndef __rtems__
 	struct proc *p;
+#endif /* __rtems__ */
 	struct tuntap_softc *tp;
 	struct ifnet *ifp;
 	bool l2tun;
 
 	tp = data;
+#ifndef __rtems__
 	p = curproc;
+#endif /* __rtems__ */
 	ifp = TUN2IFP(tp);
 
 	TUN_LOCK(tp);
 
+#ifndef __rtems__
 	/*
 	 * Realistically, we can't be obstinate here.  This only means that the
 	 * tuntap device was closed out of order, and the last closer wasn't the
@@ -1123,6 +1132,7 @@ tundtor(void *data)
 		    "pid %d (%s), %s: tun/tap protocol violation, non-controlling process closed last.\n",
 		    p->p_pid, p->p_comm, tp->tun_dev->si_name);
 	}
+#endif /* __rtems__ */
 
 	/*
 	 * junk all pending output
@@ -1176,7 +1186,9 @@ out:
 	KNOTE_LOCKED(&tp->tun_rsel.si_note, 0);
 	TUNDEBUG (ifp, "closed\n");
 	tp->tun_flags &= ~TUN_OPEN;
+#ifndef __rtems__
 	tp->tun_pid = 0;
+#endif /* __rtems__ */
 
 	tun_unbusy_locked(tp);
 	TUN_UNLOCK(tp);
@@ -1259,10 +1271,12 @@ tunifioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 	case SIOCGIFSTATUS:
 		ifs = (struct ifstat *)data;
 		TUN_LOCK(tp);
+#ifndef __rtems__
 		if (tp->tun_pid)
 			snprintf(ifs->ascii, sizeof(ifs->ascii),
 			    "\tOpened by PID %d\n", tp->tun_pid);
 		else
+#endif /* __rtems__ */
 			ifs->ascii[0] = '\0';
 		TUN_UNLOCK(tp);
 		break;
@@ -1509,9 +1523,11 @@ tunioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag,
 
 			return (0);
 		case TUNSIFPID:
+#ifndef __rtems__
 			TUN_LOCK(tp);
 			tp->tun_pid = curthread->td_proc->p_pid;
 			TUN_UNLOCK(tp);
+#endif /* __rtems__ */
 
 			return (0);
 		}

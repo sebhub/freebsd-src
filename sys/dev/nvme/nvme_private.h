@@ -130,6 +130,9 @@ extern devclass_t nvme_devclass;
 #define NVME_REQUEST_UIO	3
 #define NVME_REQUEST_BIO	4
 #define NVME_REQUEST_CCB        5
+#ifdef __rtems__
+#define NVME_REQUEST_IOV	10
+#endif /* __rtems__ */
 
 struct nvme_request {
 
@@ -138,6 +141,9 @@ struct nvme_request {
 	union {
 		void			*payload;
 		struct bio		*bio;
+#ifdef __rtems__
+		const struct iovec	*iov;
+#endif /* __rtems__ */
 	} u;
 	uint32_t			type;
 	uint32_t			payload_size;
@@ -164,19 +170,27 @@ struct nvme_tracker {
 	struct nvme_request		*req;
 	struct nvme_qpair		*qpair;
 	struct callout			timer;
+#ifndef __rtems__
 	bus_dmamap_t			payload_dma_map;
+#endif /* __rtems__ */
 	uint16_t			cid;
 
 	uint64_t			*prp;
+#ifndef __rtems__
 	bus_addr_t			prp_bus_addr;
+#else /* __rtems__ */
+	uint64_t			prp_bus_addr;
+#endif /* __rtems__ */
 };
 
 struct nvme_qpair {
 
 	struct nvme_controller	*ctrlr;
 	uint32_t		id;
+#ifndef __rtems__
 	int			domain;
 	int			cpu;
+#endif /* __rtems__ */
 
 	uint16_t		vector;
 	int			rid;
@@ -202,7 +216,9 @@ struct nvme_qpair {
 	struct nvme_completion	*cpl;
 
 	bus_dma_tag_t		dma_tag;
+#ifndef __rtems__
 	bus_dma_tag_t		dma_tag_payload;
+#endif /* __rtems__ */
 
 	bus_dmamap_t		queuemem_map;
 	uint64_t		cmd_bus_addr;
@@ -240,7 +256,9 @@ struct nvme_controller {
 	device_t		dev;
 
 	struct mtx		lock;
+#ifndef __rtems__
 	int			domain;
+#endif /* __rtems__ */
 	uint32_t		ready_timeout_in_ms;
 	uint32_t		quirks;
 #define	QUIRK_DELAY_B4_CHK_RDY	1		/* Can't touch MMIO on disable */
@@ -323,6 +341,7 @@ struct nvme_controller {
 	STAILQ_HEAD(, nvme_request)	fail_req;
 
 	/* Host Memory Buffer */
+#ifndef __rtems__
 	int				hmb_nchunks;
 	size_t				hmb_chunk;
 	bus_dma_tag_t			hmb_tag;
@@ -335,26 +354,27 @@ struct nvme_controller {
 	bus_dmamap_t			hmb_desc_map;
 	struct nvme_hmb_desc		*hmb_desc_vaddr;
 	uint64_t			hmb_desc_paddr;
+#endif /* __rtems__ */
 };
 
 #define nvme_mmio_offsetof(reg)						       \
 	offsetof(struct nvme_registers, reg)
 
 #define nvme_mmio_read_4(sc, reg)					       \
-	bus_space_read_4((sc)->bus_tag, (sc)->bus_handle,		       \
-	    nvme_mmio_offsetof(reg))
+	le32toh(bus_space_read_4((sc)->bus_tag, (sc)->bus_handle,	       \
+	    nvme_mmio_offsetof(reg)))
 
 #define nvme_mmio_write_4(sc, reg, val)					       \
 	bus_space_write_4((sc)->bus_tag, (sc)->bus_handle,		       \
-	    nvme_mmio_offsetof(reg), val)
+	    nvme_mmio_offsetof(reg), htole32(val))
 
 #define nvme_mmio_write_8(sc, reg, val)					       \
 	do {								       \
 		bus_space_write_4((sc)->bus_tag, (sc)->bus_handle,	       \
-		    nvme_mmio_offsetof(reg), val & 0xFFFFFFFF); 	       \
+		    nvme_mmio_offsetof(reg), htole32(val & 0xFFFFFFFF));       \
 		bus_space_write_4((sc)->bus_tag, (sc)->bus_handle,	       \
 		    nvme_mmio_offsetof(reg)+4,				       \
-		    (val & 0xFFFFFFFF00000000ULL) >> 32);		       \
+		    htole32((val & 0xFFFFFFFF00000000ULL) >> 32));	       \
 	} while (0);
 
 #define nvme_printf(ctrlr, fmt, args...)	\
@@ -555,6 +575,23 @@ nvme_allocate_request_ccb(union ccb *ccb, nvme_cb_fn_t cb_fn, void *cb_arg)
 
 	return (req);
 }
+#ifdef __rtems__
+static __inline struct nvme_request *
+nvme_allocate_request_iov(const struct iovec *iov, uint32_t payload_size,
+    nvme_cb_fn_t cb_fn, void *cb_arg)
+{
+	struct nvme_request *req;
+
+	req = _nvme_allocate_request(cb_fn, cb_arg);
+	if (req != NULL) {
+		req->type = NVME_REQUEST_IOV;
+		req->u.iov = iov;
+		req->payload_size = payload_size;
+	}
+
+	return (req);
+}
+#endif /* __rtems__ */
 
 #define nvme_free_request(req)	uma_zfree(nvme_request_zone, req)
 

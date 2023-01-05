@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-openssl-namespace.h"
+#endif /* __rtems__ */
+
 /*
  * Copyright 1995-2018 The OpenSSL Project Authors. All Rights Reserved.
  *
@@ -403,3 +408,6 @@ static SSL *doConnection(SSL *scon, const char *host, SSL_CTX *ctx)
     return serverCon;
 }
 #endif /* OPENSSL_NO_SOCK */
+#ifdef __rtems__
+#include "rtems-bsd-openssl-s_time-data.h"
+#endif /* __rtems__ */

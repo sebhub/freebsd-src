@@ -227,7 +227,9 @@ struct uma_keg {
 	struct uma_hash	uk_hash;
 	LIST_HEAD(,uma_zone)	uk_zones;	/* Keg's zones */
 
+#ifndef __rtems__
 	struct domainset_ref uk_dr;	/* Domain selection policy. */
+#endif /* __rtems__ */
 	uint32_t	uk_align;	/* Alignment mask */
 	uint32_t	uk_pages;	/* Total page count */
 	uint32_t	uk_free;	/* Count of items free in slabs */
@@ -273,7 +275,9 @@ struct uma_slab {
 	uma_keg_t	us_keg;			/* Keg we live in */
 	union {
 		LIST_ENTRY(uma_slab)	_us_link;	/* slabs in zone */
+#ifndef __rtems__
 		unsigned long	_us_size;	/* Size of allocation */
+#endif /* __rtems__ */
 	} us_type;
 	SLIST_ENTRY(uma_slab)	us_hlink;	/* Link for hash table */
 	uint8_t		*us_data;		/* First item */
@@ -287,7 +291,9 @@ struct uma_slab {
 };
 
 #define	us_link	us_type._us_link
+#ifndef __rtems__
 #define	us_size	us_type._us_size
+#endif /* __rtems__ */
 
 #if MAXMEMDOM >= 255
 #error "Slab domain type insufficient"
@@ -322,7 +328,11 @@ struct uma_zone {
 	/* Offset 0, used in alloc/free fast/medium fast path and const. */
 	struct mtx	*uz_lockptr;
 	const char	*uz_name;	/* Text name of the zone */
+#ifndef __rtems__
 	struct uma_zone_domain	*uz_domain;	/* per-domain buckets */
+#else /* __rtems__ */
+	struct uma_zone_domain	uz_domain[1];	/* per-domain buckets */
+#endif /* __rtems__ */
 	uint32_t	uz_flags;	/* Flags inherited from kegs */
 	uint32_t	uz_size;	/* Size inherited from kegs */
 	uma_ctor	uz_ctor;	/* Constructor for each allocation */
@@ -460,22 +470,33 @@ hash_sfind(struct uma_hash *hash, uint8_t *data)
         return (NULL);
 }
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-page.h>
+#endif /* __rtems__ */
 static __inline uma_slab_t
 vtoslab(vm_offset_t va)
 {
+#ifndef __rtems__
 	vm_page_t p;
 
 	p = PHYS_TO_VM_PAGE(pmap_kextract(va));
 	return ((uma_slab_t)p->plinks.s.pv);
+#else /* __rtems__ */
+	return (rtems_bsd_page_get_object((void *)va));
+#endif /* __rtems__ */
 }
 
 static __inline void
 vsetslab(vm_offset_t va, uma_slab_t slab)
 {
+#ifndef __rtems__
 	vm_page_t p;
 
 	p = PHYS_TO_VM_PAGE(pmap_kextract(va));
 	p->plinks.s.pv = slab;
+#else /* __rtems__ */
+	rtems_bsd_page_set_object((void *)va, slab);
+#endif /* __rtems__ */
 }
 
 /*

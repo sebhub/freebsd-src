@@ -45,6 +45,7 @@ struct rm_queue {
 	struct rm_queue	*volatile rmq_prev;
 };
 
+#ifndef __rtems__
 struct rmlock {
 	struct lock_object lock_object;
 	volatile cpuset_t rm_writecpus;
@@ -59,6 +60,10 @@ struct rmlock {
 #define	rm_wlock_object	_rm_lock._rm_wlock_object
 #define	rm_lock_mtx	_rm_lock._rm_lock_mtx
 #define	rm_lock_sx	_rm_lock._rm_lock_sx
+#else /* __rtems__ */
+#include <sys/_rwlock.h>
+#define	rmlock rwlock
+#endif /* __rtems__ */
 
 struct rm_priotracker {
 	struct rm_queue rmp_cpuQueue; /* Must be first */

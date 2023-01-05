@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2007 - Andrey "nording" Chernyak <andrew@nording.ru>
  *
@@ -127,3 +131,6 @@ rrcp_print(netdissect_options *ndo,
 trunc:
 	ND_PRINT((ndo, "[|rrcp]"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-rrcp-data.h"
+#endif /* __rtems__ */

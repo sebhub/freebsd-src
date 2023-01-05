@@ -37,6 +37,10 @@
  *	@(#)in_pcb.c	8.4 (Berkeley) 5/24/95
  */
 
+#ifdef __rtems__
+#include <errno.h>
+#undef errno
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -746,10 +750,12 @@ int
 in_pcbbind_check_bindmulti(const struct inpcb *ni, const struct inpcb *oi)
 {
 	/* Check permissions match */
+#ifndef __rtems__
 	if ((ni->inp_flags2 & INP_BINDMULTI) &&
 	    (ni->inp_cred->cr_uid !=
 	    oi->inp_cred->cr_uid))
 		return (0);
+#endif /* __rtems__ */
 
 	/* Check the existing inp has BINDMULTI set */
 	if ((ni->inp_flags2 & INP_BINDMULTI) &&
@@ -887,8 +893,12 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 				     ntohl(t->inp_laddr.s_addr) != INADDR_ANY ||
 				     (t->inp_flags2 & INP_REUSEPORT) ||
 				     (t->inp_flags2 & INP_REUSEPORT_LB) == 0) &&
+#ifndef __rtems__
 				    (inp->inp_cred->cr_uid !=
 				     t->inp_cred->cr_uid))
+#else /* __rtems__ */
+				    0)
+#endif /* __rtems__ */
 					return (EADDRINUSE);
 
 				/*

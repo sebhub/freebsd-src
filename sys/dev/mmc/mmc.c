@@ -452,6 +452,7 @@ mmc_highest_voltage(uint32_t ocr)
 static void
 mmc_wakeup(struct mmc_request *req)
 {
+#ifndef __rtems__
 	struct mmc_softc *sc;
 
 	sc = (struct mmc_softc *)req->done_data;
@@ -459,12 +460,18 @@ mmc_wakeup(struct mmc_request *req)
 	req->flags |= MMC_REQ_DONE;
 	MMC_UNLOCK(sc);
 	wakeup(req);
+#else /* __rtems__ */
+	rtems_binary_semaphore_post(&req->req_done);
+#endif /* __rtems__ */
 }
 
 static int
 mmc_wait_for_req(struct mmc_softc *sc, struct mmc_request *req)
 {
 
+#ifdef __rtems__
+	rtems_binary_semaphore_init(&req->req_done, "mmc_req_done");
+#endif /* __rtems__ */
 	req->done = mmc_wakeup;
 	req->done_data = sc;
 	if (__predict_false(mmc_debug > 1)) {
@@ -476,10 +483,15 @@ mmc_wait_for_req(struct mmc_softc *sc, struct mmc_request *req)
 			printf("\n");
 	}
 	MMCBR_REQUEST(device_get_parent(sc->dev), sc->dev, req);
+#ifndef __rtems__
 	MMC_LOCK(sc);
 	while ((req->flags & MMC_REQ_DONE) == 0)
 		msleep(req, &sc->sc_mtx, 0, "mmcreq", 0);
 	MMC_UNLOCK(sc);
+#else /* __rtems__ */
+	rtems_binary_semaphore_wait(&req->req_done);
+	rtems_binary_semaphore_destroy(&req->req_done);
+#endif /* __rtems__ */
 	if (__predict_false(mmc_debug > 2 || (mmc_debug > 0 &&
 	    req->cmd->error != MMC_ERR_NONE)))
 		device_printf(sc->dev, "CMD%d RESULT: %d\n",

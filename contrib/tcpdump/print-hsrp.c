@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (C) 2001 Julian Cowley
  * All rights reserved.
@@ -133,3 +137,6 @@ hsrp_print(netdissect_options *ndo, register const uint8_t *bp, register u_int l
 trunc:
 	ND_PRINT((ndo, "[|hsrp]"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-hsrp-data.h"
+#endif /* __rtems__ */

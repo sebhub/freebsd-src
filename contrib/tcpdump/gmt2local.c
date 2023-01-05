@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -64,3 +68,6 @@ gmt2local(time_t t)
 
 	return (dt);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-gmt2local-data.h"
+#endif /* __rtems__ */

@@ -14,6 +14,9 @@
 #include "list.h"
 #include "eloop.h"
 
+#ifdef __rtems__
+#define CONFIG_ELOOP_KQUEUE
+#endif /* __rtems__ */
 #if defined(CONFIG_ELOOP_POLL) && defined(CONFIG_ELOOP_EPOLL)
 #error Do not define both of poll and epoll
 #endif
@@ -953,6 +956,7 @@ int eloop_replenish_timeout(unsigned int req_secs, unsigned int req_usecs,
 }
 
 
+#ifndef __rtems__
 #ifndef CONFIG_NATIVE_WINDOWS
 static void eloop_handle_alarm(int sig)
 {
@@ -964,8 +968,10 @@ static void eloop_handle_alarm(int sig)
 	exit(1);
 }
 #endif /* CONFIG_NATIVE_WINDOWS */
+#endif /* __rtems__ */
 
 
+#ifndef __rtems__
 static void eloop_handle_signal(int sig)
 {
 	int i;
@@ -988,6 +994,7 @@ static void eloop_handle_signal(int sig)
 		}
 	}
 }
+#endif /* __rtems__ */
 
 
 static void eloop_process_pending_signals(void)
@@ -999,9 +1006,11 @@ static void eloop_process_pending_signals(void)
 	eloop.signaled = 0;
 
 	if (eloop.pending_terminate) {
+#ifndef __rtems__
 #ifndef CONFIG_NATIVE_WINDOWS
 		alarm(0);
 #endif /* CONFIG_NATIVE_WINDOWS */
+#endif /* __rtems__ */
 		eloop.pending_terminate = 0;
 	}
 
@@ -1015,6 +1024,7 @@ static void eloop_process_pending_signals(void)
 }
 
 
+#ifndef __rtems__
 int eloop_register_signal(int sig, eloop_signal_handler handler,
 			  void *user_data)
 {
@@ -1035,26 +1045,35 @@ int eloop_register_signal(int sig, eloop_signal_handler handler,
 
 	return 0;
 }
+#endif /* __rtems__ */
 
 
 int eloop_register_signal_terminate(eloop_signal_handler handler,
 				    void *user_data)
 {
+#ifndef __rtems__
 	int ret = eloop_register_signal(SIGINT, handler, user_data);
 	if (ret == 0)
 		ret = eloop_register_signal(SIGTERM, handler, user_data);
 	return ret;
+#else /* __rtems__ */
+	return 0;
+#endif /* __rtems__ */
 }
 
 
 int eloop_register_signal_reconfig(eloop_signal_handler handler,
 				   void *user_data)
 {
+#ifndef __rtems__
 #ifdef CONFIG_NATIVE_WINDOWS
 	return 0;
 #else /* CONFIG_NATIVE_WINDOWS */
 	return eloop_register_signal(SIGHUP, handler, user_data);
 #endif /* CONFIG_NATIVE_WINDOWS */
+#else /* __rtems__ */
+	return 0;
+#endif /* __rtems__ */
 }
 
 

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * Copyright (c) 2014 Alexander V. Chernikov. All rights reserved.
  *
@@ -28,6 +32,9 @@ static const char rcsid[] =
   "$FreeBSD$";
 #endif /* not lint */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/ioctl.h>
@@ -47,6 +54,14 @@ static const char rcsid[] =
 #include <unistd.h>
 
 #include "ifconfig.h"
+#ifdef __rtems__
+struct _nv {
+	int v;
+	const char *n;
+};
+
+#include "rtems-bsd-ifconfig-sfp-data.h"
+#endif /* __rtems__ */
 
 struct i2c_info {
 	int fd;			/* fd to issue SIOCGI2C */
@@ -61,10 +76,12 @@ static int read_i2c(struct i2c_info *ii, uint8_t addr, uint8_t off,
 static void dump_i2c_data(struct i2c_info *ii, uint8_t addr, uint8_t off,
     uint8_t len);
 
+#ifndef __rtems__
 struct _nv {
 	int v;
 	const char *n;
 };
+#endif /* __rtems__ */
 
 const char *find_value(struct _nv *x, int value);
 const char *find_zero_bit(struct _nv *x, int value, int sz);

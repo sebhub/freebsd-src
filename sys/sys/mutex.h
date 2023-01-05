@@ -45,6 +45,9 @@
 #include <machine/atomic.h>
 #include <machine/cpufunc.h>
 
+#ifdef __rtems__
+#define MUTEX_NOINLINE 1
+#endif /* __rtems__ */
 /*
  * Mutex types and options passed to mtx_init().  MTX_QUIET and MTX_DUPOK
  * can also be passed in.
@@ -89,14 +92,19 @@
  * [See below for descriptions]
  *
  */
+#ifndef __rtems__
 void	_mtx_init(volatile uintptr_t *c, const char *name, const char *type,
 	    int opts);
 void	_mtx_destroy(volatile uintptr_t *c);
+#endif /* __rtems__ */
 void	mtx_sysinit(void *arg);
+#ifndef __rtems__
 int	_mtx_trylock_flags_int(struct mtx *m, int opts LOCK_FILE_LINE_ARG_DEF);
 int	_mtx_trylock_flags_(volatile uintptr_t *c, int opts, const char *file,
 	    int line);
+#endif /* __rtems__ */
 void	mutex_init(void);
+#ifndef __rtems__
 #if LOCK_DEBUG > 0
 void	__mtx_lock_sleep(volatile uintptr_t *c, uintptr_t v, int opts,
 	    const char *file, int line);
@@ -127,10 +135,25 @@ void	__mtx_unlock_spin_flags(volatile uintptr_t *c, int opts,
 	    const char *file, int line);
 void	mtx_spin_wait_unlocked(struct mtx *m);
 
+#else /* __rtems__ */
+void	mtx_init(struct mtx *m, const char *name, const char *type, int opts);
+void	mtx_destroy(struct mtx *m);
+void	mtx_sysinit(void *arg);
+int	mtx_trylock_flags_(struct mtx *m, int opts, const char *file, int line);
+void	_mtx_lock_flags(struct mtx *m, int opts, const char *file, int line);
+void	_mtx_unlock_flags(struct mtx *m, int opts, const char *file, int line);
+#define	_mtx_lock_spin_flags _mtx_lock_flags
+#define	_mtx_unlock_spin_flags _mtx_unlock_flags
+#endif /* __rtems__ */
 #if defined(INVARIANTS) || defined(INVARIANT_SUPPORT)
+#ifndef __rtems__
 void	__mtx_assert(const volatile uintptr_t *c, int what, const char *file,
 	    int line);
+#else /* __rtems__ */
+void	_mtx_assert(struct mtx *m, int what, const char *file, int line);
+#endif /* __rtems__ */
 #endif
+#ifndef __rtems__
 void	thread_lock_flags_(struct thread *, int, const char *, int);
 #if LOCK_DEBUG > 0
 void	_thread_lock(struct thread *td, int opts, const char *file, int line);
@@ -159,7 +182,13 @@ void	_thread_lock(struct thread *);
 
 #define	thread_unlock(tdp)						\
        mtx_unlock_spin((tdp)->td_lock)
+#else /* __rtems__ */
+#define	thread_lock(tdp)
+#define	thread_lock_flags(tdp, opt)
+#define	thread_unlock(tdp)
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 /*
  * Top-level macros to provide lock cookie once the actual mtx is passed.
  * They will also prevent passing a malformed object to the mtx KPI by
@@ -205,6 +234,7 @@ void	_thread_lock(struct thread *);
 #define	_mtx_assert(m, w, f, l)						\
 	__mtx_assert(&(m)->mtx_lock, w, f, l)
 #endif
+#endif /* __rtems__ */
 
 #define	mtx_recurse	lock_object.lo_data
 
@@ -467,6 +497,7 @@ extern struct mtx_pool *mtxpool_sleep;
 
 #define	mtx_initialized(m)	lock_initialized(&(m)->lock_object)
 
+#ifndef __rtems__
 #define lv_mtx_owner(v)	((struct thread *)((v) & ~MTX_FLAGMASK))
 
 #define mtx_owner(m)	lv_mtx_owner(MTX_READ_VALUE(m))
@@ -474,6 +505,10 @@ extern struct mtx_pool *mtxpool_sleep;
 #define mtx_owned(m)	(mtx_owner(m) == curthread)
 
 #define mtx_recursed(m)	((m)->mtx_recurse != 0)
+#else /* __rtems__ */
+int mtx_owned(struct mtx *m);
+int mtx_recursed(struct mtx *m);
+#endif /* __rtems__ */
 
 #define mtx_name(m)	((m)->lock_object.lo_name)
 

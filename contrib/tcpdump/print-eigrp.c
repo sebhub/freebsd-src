@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1998-2004  Hannes Gredler <hannes@gredler.at>
  *      The TCPDUMP project
@@ -522,3 +526,6 @@ eigrp_print(netdissect_options *ndo, register const u_char *pptr, register u_int
 trunc:
     ND_PRINT((ndo, "\n\t\t packet exceeded snapshot"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-eigrp-data.h"
+#endif /* __rtems__ */

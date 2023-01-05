@@ -49,6 +49,7 @@
 #define	RM_SLEEPABLE	0x00000004
 #define	RM_NEW		0x00000008
 
+#ifndef __rtems__
 void	rm_init(struct rmlock *rm, const char *name);
 void	rm_init_flags(struct rmlock *rm, const char *name, int opts);
 void	rm_destroy(struct rmlock *rm);
@@ -98,6 +99,24 @@ void	_rm_assert(const struct rmlock *rm, int what, const char *file,
 #define	rm_sleep(chan, rm, pri, wmesg, timo)				\
 	_sleep((chan), &(rm)->lock_object, (pri), (wmesg),		\
 	    tick_sbt * (timo), 0, C_HARDCLOCK)
+
+#else /* __rtems__ */
+#include <sys/rwlock.h>
+#define	rm_init rw_init
+#define	rm_init_flags rw_init_flags
+#define	rm_destroy rw_destroy
+#define	rm_wowned rw_wowned
+#define	rm_sysinit rw_sysinit
+#define	rm_sysinit_flags rw_sysinit_flags
+#define	rm_wlock rw_wlock
+#define	rm_wunlock rw_wunlock
+#define	rm_rlock(rm, tracker) do { (void)tracker; rw_rlock(rm); } while (0)
+#define	rm_runlock(rm, tracker) do { (void)tracker; rw_runlock(rm); } while (0)
+#define	rm_sleep rw_sleep
+#define	_rm_assert _rw_assert
+#endif /* __rtems__ */
+
+
 
 struct rm_args {
 	struct rmlock	*ra_rm;

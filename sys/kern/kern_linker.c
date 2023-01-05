@@ -70,6 +70,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/pmckern.h>
 #endif
 
+#ifndef __rtems__
 #ifdef KLD_DEBUG
 int kld_debug = 0;
 SYSCTL_INT(_debug, OID_AUTO, kld_debug, CTLFLAG_RWTUN,
@@ -97,10 +98,12 @@ static linker_file_t linker_find_file_by_name(const char* _filename);
  * Find a currently loaded file given its file id.
  */
 static linker_file_t linker_find_file_by_id(int _fileid);
+#endif /* __rtems__ */
 
 /* Metadata from the static kernel */
 SET_DECLARE(modmetadata_set, struct mod_metadata);
 
+#ifndef __rtems__
 MALLOC_DEFINE(M_LINKER, "linker", "kernel linker");
 
 linker_file_t linker_kernel_file;
@@ -357,6 +360,7 @@ linker_file_unregister_sysctls(linker_file_t lf)
 	sysctl_wunlock();
 	sx_xlock(&kld_sx);
 }
+#endif /* __rtems__ */
 
 static int
 linker_file_register_modules(linker_file_t lf)
@@ -368,6 +372,7 @@ linker_file_register_modules(linker_file_t lf)
 	KLD_DPF(FILE, ("linker_file_register_modules: registering modules"
 	    " in %s\n", lf->filename));
 
+#ifndef __rtems__
 	sx_assert(&kld_sx, SA_XLOCKED);
 
 	if (linker_file_lookup_set(lf, "modmetadata_set", &start,
@@ -383,6 +388,10 @@ linker_file_register_modules(linker_file_t lf)
 		} else
 			return (0);
 	}
+#else /* __rtems__ */
+	start = SET_BEGIN(modmetadata_set);
+	stop = SET_LIMIT(modmetadata_set);
+#endif /* __rtems__ */
 	first_error = 0;
 	for (mdp = start; mdp < stop; mdp++) {
 		if ((*mdp)->md_type != MDT_MODULE)
@@ -405,14 +414,19 @@ static void
 linker_init_kernel_modules(void)
 {
 
+#ifndef __rtems__
 	sx_xlock(&kld_sx);
 	linker_file_register_modules(linker_kernel_file);
 	sx_xunlock(&kld_sx);
+#else /* __rtems__ */
+	linker_file_register_modules(NULL);
+#endif /* __rtems__ */
 }
 
 SYSINIT(linker_kernel, SI_SUB_KLD, SI_ORDER_ANY, linker_init_kernel_modules,
     NULL);
 
+#ifndef __rtems__
 static int
 linker_load_file(const char *filename, linker_file_t *result)
 {
@@ -2243,3 +2257,4 @@ sysctl_kern_function_list(SYSCTL_HANDLER_ARGS)
 
 SYSCTL_PROC(_kern, OID_AUTO, function_list, CTLTYPE_OPAQUE | CTLFLAG_RD,
     NULL, 0, sysctl_kern_function_list, "", "kernel function list");
+#endif /* __rtems__ */

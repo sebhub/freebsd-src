@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ping-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -64,6 +68,13 @@ __FBSDID("$FreeBSD$");
  *	This program has to run SUID to ROOT to access the ICMP socket.
  */
 
+#ifdef __rtems__
+#define __need_getopt_newlib
+#include <getopt.h>
+#include <machine/rtems-bsd-program.h>
+#include <machine/rtems-bsd-commands.h>
+#include <rtems/libio_.h>
+#endif /* __rtems__ */
 #include <sys/param.h>		/* NB: we rely on this for <sys/types.h> */
 #include <sys/capsicum.h>
 #include <sys/socket.h>
@@ -98,6 +109,9 @@ __FBSDID("$FreeBSD$");
 #include <sysexits.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef __rtems__
+#include "rtems-bsd-ping-ping-data.h"
+#endif /* __rtems__ */
 
 #include "utils.h"
 
@@ -161,7 +175,6 @@ static int options;
  * to 8192 for complete accuracy...
  */
 #define	MAX_DUP_CHK	(8 * 128)
-static int mx_dup_ck = MAX_DUP_CHK;
 static char rcvd_tbl[MAX_DUP_CHK / 8];
 
 static struct sockaddr_in whereto;	/* who to ping */
@@ -170,9 +183,9 @@ static int maxpayload;
 static int ssend;		/* send socket file descriptor */
 static int srecv;		/* receive socket file descriptor */
 static u_char outpackhdr[IP_MAXPACKET], *outpack;
-static char BBELL = '\a';	/* characters written for MISSED and AUDIBLE */
-static char BSPACE = '\b';	/* characters written for flood */
-static char DOT = '.';
+static const char BBELL = '\a';	/* characters written for MISSED and AUDIBLE */
+static const char BSPACE = '\b';	/* characters written for flood */
+static const char DOT = '.';
 static char *hostname;
 static char *shostname;
 static int ident;		/* process id to identify our packets */
@@ -184,7 +197,11 @@ static int send_len;
 
 /* counters */
 static long nmissedmax;		/* max value of ntransmitted - nreceived - 1 */
+#ifndef __rtems__
 static long npackets;		/* max packets to transmit */
+#else /* __rtems__ */
+static long npackets = 3;	/* max packets to transmit */
+#endif /* __rtems__ */
 static long nreceived;		/* # of packets we got back */
 static long nrepeats;		/* number of duplicates */
 static long ntransmitted;	/* sequence # for outbound packets = #sent */
@@ -206,12 +223,22 @@ static double tsumsq = 0.0;	/* sum of all times squared, for std. dev. */
 
 /* nonzero if we've been told to finish up */
 static volatile sig_atomic_t finish_up;
+#ifndef __rtems__
 static volatile sig_atomic_t siginfo_p;
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 static cap_channel_t *capdns;
+#else /* __rtems__ */
+#define	capdns NULL
+static u_char packet[IP_MAXPACKET] __aligned(4);
+static char hnamebuf[MAXHOSTNAMELEN], snamebuf[MAXHOSTNAMELEN];
+#endif /* __rtems__ */
 
 static void fill(char *, char *);
+#ifndef __rtems__
 static cap_channel_t *capdns_setup(void);
+#endif /* __rtems__ */
 static void check_status(void);
 static void finish(void) __dead2;
 static void pinger(void);
@@ -221,21 +248,55 @@ static void pr_icmph(struct icmp *, struct ip *, const u_char *const);
 static void pr_iph(struct ip *);
 static void pr_pack(char *, ssize_t, struct sockaddr_in *, struct timespec *);
 static void pr_retip(struct ip *, const u_char *);
+#ifndef __rtems__
 static void status(int);
 static void stopit(int);
+#endif /* __rtems__ */
 static void usage(void) __dead2;
 
+#ifdef __rtems__
+static int main(int argc, char *argv[]);
+
+RTEMS_LINKER_RWSET(bsd_prog_ping, char);
+
+int
+rtems_bsd_command_ping(int argc, char *argv[])
+{
+	int exit_code;
+	void *data_begin;
+	size_t data_size;
+
+	data_begin = RTEMS_LINKER_SET_BEGIN(bsd_prog_ping);
+	data_size = RTEMS_LINKER_SET_SIZE(bsd_prog_ping);
+
+	rtems_bsd_program_lock();
+	exit_code = rtems_bsd_program_call_main_with_data_restore("ping",
+	    main, argc, argv, data_begin, data_size);
+	rtems_bsd_program_unlock();
+
+	return exit_code;
+}
+int
+main(int argc, char **argv)
+#else /* __rtems__ */
 int
 main(int argc, char *const *argv)
+#endif /* __rtems__ */
 {
 	struct sockaddr_in from, sock_in;
 	struct in_addr ifaddr;
 	struct timespec last, intvl;
 	struct iovec iov;
 	struct msghdr msg;
+#ifndef __rtems__
 	struct sigaction si_sa;
+#endif /* __rtems__ */
 	size_t sz;
+#ifndef __rtems__
 	u_char *datap, packet[IP_MAXPACKET] __aligned(4);
+#else /* __rtems__ */
+	u_char *datap;
+#endif /* __rtems__ */
 	char *ep, *source, *target, *payload;
 	struct hostent *hp;
 #ifdef IPSEC_POLICY_IPSEC
@@ -243,12 +304,16 @@ main(int argc, char *const *argv)
 #endif
 	struct sockaddr_in *to;
 	double t;
+#ifndef __rtems__
 	u_long alarmtimeout;
+#endif /* __rtems__ */
 	long ltmp;
 	int almost_done, ch, df, hold, i, icmp_len, mib[4], preload;
 	int ssend_errno, srecv_errno, tos, ttl;
 	char ctrl[CMSG_SPACE(sizeof(struct timespec))];
+#ifndef __rtems__
 	char hnamebuf[MAXHOSTNAMELEN], snamebuf[MAXHOSTNAMELEN];
+#endif /* __rtems__ */
 #ifdef IP_OPTIONS
 	char rspace[MAX_IPOPTLEN];	/* record route space */
 #endif
@@ -258,8 +323,18 @@ main(int argc, char *const *argv)
 #ifdef IPSEC_POLICY_IPSEC
 	policy_in = policy_out = NULL;
 #endif
+#ifndef __rtems__
 	cap_rights_t rights;
 	bool cansandbox;
+#else /* __rtems__ */
+	struct getopt_data getopt_data;
+	memset(&getopt_data, 0, sizeof(getopt_data));
+#define optind getopt_data.optind
+#define optarg getopt_data.optarg
+#define opterr getopt_data.opterr
+#define optopt getopt_data.optopt
+#define getopt(argc, argv, opt) getopt_r(argc, argv, "+" opt, &getopt_data)
+#endif /* __rtems__ */
 
 	options |= F_NUMERIC;
 
@@ -295,7 +370,9 @@ main(int argc, char *const *argv)
 		err(EX_OSERR, "srecv socket");
 	}
 
+#ifndef __rtems__
 	alarmtimeout = df = preload = tos = 0;
+#endif /* __rtems__ */
 
 	outpack = outpackhdr + sizeof(struct ip);
 	while ((ch = getopt(argc, argv,
@@ -494,6 +571,7 @@ main(int argc, char *const *argv)
 			mttl = ltmp;
 			options |= F_MTTL;
 			break;
+#ifndef __rtems__
 		case 't':
 			alarmtimeout = strtoul(optarg, &ep, 0);
 			if ((alarmtimeout < 1) || (alarmtimeout == ULONG_MAX))
@@ -504,6 +582,7 @@ main(int argc, char *const *argv)
 				    optarg, MAXALARM);
 			alarm((int)alarmtimeout);
 			break;
+#endif /* __rtems__ */
 		case 'v':
 			options |= F_VERBOSE;
 			break;
@@ -563,7 +642,9 @@ main(int argc, char *const *argv)
 	if (options & F_PINGFILLED) {
 		fill((char *)datap, payload);
 	}
+#ifndef __rtems__
 	capdns = capdns_setup();
+#endif /* __rtems__ */
 	if (source) {
 		bzero((char *)&sock_in, sizeof(sock_in));
 		sock_in.sin_family = AF_INET;
@@ -628,6 +709,7 @@ main(int argc, char *const *argv)
 			err(1, "unable to limit access to system.dns service");
 	}
 #endif
+
 	if (connect(ssend, (struct sockaddr *)&whereto, sizeof(whereto)) != 0)
 		err(1, "connect");
 
@@ -716,6 +798,7 @@ main(int argc, char *const *argv)
 		memcpy(outpackhdr, &ip, sizeof(ip));
         }
 
+#ifndef __rtems__
 	if (options & F_NUMERIC)
 		cansandbox = true;
 	else if (capdns != NULL)
@@ -738,6 +821,7 @@ main(int argc, char *const *argv)
 	cap_rights_init(&rights, CAP_SEND, CAP_SETSOCKOPT);
 	if (cap_rights_limit(ssend, &rights) < 0 && errno != ENOSYS)
 		err(1, "cap_rights_limit ssend");
+#endif /* __rtems__ */
 
 	/* record route option */
 	if (options & F_RROUTE) {
@@ -825,17 +909,21 @@ main(int argc, char *const *argv)
 	hold = IP_MAXPACKET + 128;
 	(void)setsockopt(srecv, SOL_SOCKET, SO_RCVBUF, (char *)&hold,
 	    sizeof(hold));
+#ifndef __rtems__
 	/* CAP_SETSOCKOPT removed */
 	cap_rights_init(&rights, CAP_RECV, CAP_EVENT);
 	if (cap_rights_limit(srecv, &rights) < 0 && errno != ENOSYS)
 		err(1, "cap_rights_limit srecv setsockopt");
+#endif /* __rtems__ */
 	if (uid == 0)
 		(void)setsockopt(ssend, SOL_SOCKET, SO_SNDBUF, (char *)&hold,
 		    sizeof(hold));
+#ifndef __rtems__
 	/* CAP_SETSOCKOPT removed */
 	cap_rights_init(&rights, CAP_SEND);
 	if (cap_rights_limit(ssend, &rights) < 0 && errno != ENOSYS)
 		err(1, "cap_rights_limit ssend setsockopt");
+#endif /* __rtems__ */
 
 	if (to->sin_family == AF_INET) {
 		(void)printf("PING %s (%s)", hostname,
@@ -856,6 +944,7 @@ main(int argc, char *const *argv)
 			(void)printf("PING %s: %d data bytes\n", hostname, datalen);
 	}
 
+#ifndef __rtems__
 	/*
 	 * Use sigaction() instead of signal() to get unambiguous semantics,
 	 * in particular with SA_RESTART not set.
@@ -879,6 +968,7 @@ main(int argc, char *const *argv)
 		if (sigaction(SIGALRM, &si_sa, 0) == -1)
 			err(EX_OSERR, "sigaction SIGALRM");
         }
+#endif /* __rtems__ */
 
 	bzero(&msg, sizeof(msg));
 	msg.msg_name = (caddr_t)&from;
@@ -912,14 +1002,24 @@ main(int argc, char *const *argv)
 	almost_done = 0;
 	while (!finish_up) {
 		struct timespec now, timeout;
+#ifndef __rtems__
 		fd_set rfds;
+#else /* __rtems__ */
+		fd_set big_enough_rfds[howmany(rtems_libio_number_iops,
+		    sizeof(fd_set) * 8)];
+#define	rfds (*(fd_set *)(&big_enough_rfds[0]))
+#endif /* __rtems__ */
 		int n;
 		ssize_t cc;
 
 		check_status();
+#ifndef __rtems__
 		if ((unsigned)srecv >= FD_SETSIZE)
 			errx(EX_OSERR, "descriptor too large");
 		FD_ZERO(&rfds);
+#else /* __rtems__ */
+		memset(big_enough_rfds, 0, sizeof(big_enough_rfds));
+#endif /* __rtems__ */
 		FD_SET(srecv, &rfds);
 		(void)clock_gettime(CLOCK_MONOTONIC, &now);
 		timespecadd(&last, &intvl, &timeout);
@@ -999,6 +1099,7 @@ main(int argc, char *const *argv)
 	exit(0);	/* Make the compiler happy */
 }
 
+#ifndef __rtems__
 /*
  * stopit --
  *	Set the global bit that causes the main loop to quit.
@@ -1017,6 +1118,7 @@ stopit(int sig __unused)
 		_exit(nreceived ? 0 : 2);
 	finish_up = 1;
 }
+#endif /* __rtems__ */
 
 /*
  * pinger --
@@ -1043,7 +1145,7 @@ pinger(void)
 	icp.icmp_seq = htons(ntransmitted);
 	icp.icmp_id = ident;			/* ID */
 
-	CLR(ntransmitted % mx_dup_ck);
+	CLR(ntransmitted % MAX_DUP_CHK);
 
 	if ((options & F_TIME) || timing) {
 		(void)clock_gettime(CLOCK_MONOTONIC, &now);
@@ -1192,12 +1294,12 @@ pr_pack(char *buf, ssize_t cc, struct sockaddr_in *from, struct timespec *tv)
 
 		seq = ntohs(icp.icmp_seq);
 
-		if (TST(seq % mx_dup_ck)) {
+		if (TST(seq % MAX_DUP_CHK)) {
 			++nrepeats;
 			--nreceived;
 			dupflag = 1;
 		} else {
-			SET(seq % mx_dup_ck);
+			SET(seq % MAX_DUP_CHK);
 			dupflag = 0;
 		}
 
@@ -1391,6 +1493,7 @@ pr_pack(char *buf, ssize_t cc, struct sockaddr_in *from, struct timespec *tv)
 	}
 }
 
+#ifndef __rtems__
 /*
  * status --
  *	Print out statistics when SIGINFO is received.
@@ -1402,11 +1505,13 @@ status(int sig __unused)
 
 	siginfo_p = 1;
 }
+#endif /* __rtems__ */
 
 static void
 check_status(void)
 {
 
+#ifndef __rtems__
 	if (siginfo_p) {
 		siginfo_p = 0;
 		(void)fprintf(stderr, "\r%ld/%ld packets received (%.1f%%)",
@@ -1417,6 +1522,7 @@ check_status(void)
 			    tmin, tsum / (nreceived + nrepeats), tmax);
 		(void)fprintf(stderr, "\n");
 	}
+#endif /* __rtems__ */
 }
 
 /*
@@ -1427,8 +1533,10 @@ static void
 finish(void)
 {
 
+#ifndef __rtems__
 	(void)signal(SIGINT, SIG_IGN);
 	(void)signal(SIGALRM, SIG_IGN);
+#endif /* __rtems__ */
 	(void)putchar('\n');
 	(void)fflush(stdout);
 	(void)printf("--- %s ping statistics ---\n", hostname);
@@ -1707,7 +1815,7 @@ fill(char *bp, char *patp)
 	u_int ii, jj, kk;
 
 	for (cp = patp; *cp; cp++) {
-		if (!isxdigit(*cp))
+		if (!isxdigit((unsigned char)*cp))
 			errx(EX_USAGE,
 			    "patterns must be specified as hex digits");
 
@@ -1730,6 +1838,7 @@ fill(char *bp, char *patp)
 	}
 }
 
+#ifndef __rtems__
 static cap_channel_t *
 capdns_setup(void)
 {
@@ -1757,6 +1866,7 @@ capdns_setup(void)
 #endif
 	return (capdnsloc);
 }
+#endif /* __rtems__ */
 
 #if defined(IPSEC) && defined(IPSEC_POLICY_IPSEC)
 #define	SECOPT		" [-P policy]"

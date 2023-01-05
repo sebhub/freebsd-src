@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1990, 1991, 1993, 1994, 1995, 1996, 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -118,3 +122,6 @@ vjc_print(netdissect_options *ndo, register const char *bp, u_short proto _U_)
 		return -1;
 	}
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-vjc-data.h"
+#endif /* __rtems__ */

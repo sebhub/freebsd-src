@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -34,6 +38,9 @@ static const char rcsid[] =
   "$FreeBSD$";
 #endif /* not lint */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -53,6 +60,9 @@ static const char rcsid[] =
 #include <netdb.h>
 
 #include "ifconfig.h"
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-af_inet-data.h"
+#endif /* __rtems__ */
 
 static struct in_aliasreq in_addreq;
 static struct ifreq in_ridreq;
@@ -137,6 +147,12 @@ in_getaddr(const char *s, int which)
 	struct hostent *hp;
 	struct netent *np;
 
+#ifdef __rtems__
+	/* Memory is automatically freed */
+	s = strdup(s);
+	if (s == NULL)
+		errx(1, "no memory");
+#endif /* __rtems__ */
 	sin->sin_len = sizeof(*sin);
 	sin->sin_family = AF_INET;
 
@@ -149,7 +165,11 @@ in_getaddr(const char *s, int which)
 			int masklen;
 			struct sockaddr_in *min = sintab[MASK];
 			*p = '\0';
+#ifndef __rtems__
 			if (!isdigit(*(p + 1)))
+#else /* __rtems__ */
+			if (!isdigit((unsigned char)*(p + 1)))
+#endif /* __rtems__ */
 				errstr = "invalid";
 			else
 				masklen = (int)strtonum(p + 1, 0, 32, &errstr);
@@ -230,7 +250,11 @@ static struct afswtch af_inet = {
 	.af_addreq	= &in_addreq,
 };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+void
+#endif /* __rtems__ */
 inet_ctor(void)
 {
 

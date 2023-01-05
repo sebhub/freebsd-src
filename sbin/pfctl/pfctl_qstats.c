@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-namespace.h"
+#endif /* __rtems__ */
+
 /*	$OpenBSD: pfctl_qstats.c,v 1.30 2004/04/27 21:47:32 kjc Exp $ */
 
 /*
@@ -16,6 +20,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -45,6 +52,9 @@ __FBSDID("$FreeBSD$");
 
 #include "pfctl.h"
 #include "pfctl_parser.h"
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-pfctl_qstats-data.h"
+#endif /* __rtems__ */
 
 union class_stats {
 	class_stats_t		cbq_stats;
@@ -137,6 +147,9 @@ pfctl_show_altq(int dev, const char *iface, int opts, int verbose2)
 	return (0);
 }
 
+#ifdef __rtems__
+static	u_int32_t	 last_ticket;
+#endif /* __rtems__ */
 int
 pfctl_update_qstats(int dev, struct pf_altq_node **root)
 {
@@ -145,7 +158,9 @@ pfctl_update_qstats(int dev, struct pf_altq_node **root)
 	struct pfioc_qstats	 pq;
 	u_int32_t		 mnr, nr;
 	struct queue_stats	 qstats;
+#ifndef __rtems__
 	static	u_int32_t	 last_ticket;
+#endif /* __rtems__ */
 
 	memset(&pa, 0, sizeof(pa));
 	memset(&pq, 0, sizeof(pq));

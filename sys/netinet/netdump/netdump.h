@@ -61,7 +61,9 @@ struct netdump_ack {
 } __packed;
 
 struct netdump_conf {
+#ifndef __rtems__
 	struct diocskerneldump_arg ndc_kda;
+#endif /* __rtems__ */
 	char		ndc_iface[IFNAMSIZ];
 	struct in_addr	ndc_server;
 	struct in_addr	ndc_client;

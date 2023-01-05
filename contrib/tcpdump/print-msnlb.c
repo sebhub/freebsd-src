@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2013 Romain Francoise <romain@orebokech.com>
  *
@@ -63,3 +67,6 @@ msnlb_print(netdissect_options *ndo, const u_char *bp)
 trunc:
 	ND_PRINT((ndo, "[|MS NLB]"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-msnlb-data.h"
+#endif /* __rtems__ */

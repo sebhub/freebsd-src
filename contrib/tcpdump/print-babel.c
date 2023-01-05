@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2007-2011 Grégoire Henry, Juliusz Chroboczek
  *
@@ -717,3 +721,6 @@ babel_print_v2(netdissect_options *ndo,
     ND_PRINT((ndo, "%s", istr));
     return;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-babel-data.h"
+#endif /* __rtems__ */

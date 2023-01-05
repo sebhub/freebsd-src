@@ -173,6 +173,10 @@ struct fileops pipeops = {
 	.fo_flags = DFLAG_PASSABLE
 };
 
+#ifdef __rtems__
+long	maxpipekva;			/* Limit on pipe KVA */
+#endif /* __rtems__ */
+
 static void	filt_pipedetach(struct knote *kn);
 static void	filt_pipedetach_notsup(struct knote *kn);
 static int	filt_pipenotsup(struct knote *kn, long hint);
@@ -247,7 +251,11 @@ static uma_zone_t pipe_zone;
 static struct unrhdr64 pipeino_unr;
 static dev_t pipedev_ino;
 
+#ifndef __rtems__
 SYSINIT(vfs, SI_SUB_VFS, SI_ORDER_ANY, pipeinit, NULL);
+#else /* __rtems__ */
+SYSINIT(vfspip, SI_SUB_VFS, SI_ORDER_ANY, pipeinit, NULL);
+#endif /* __rtems__ */
 
 static void
 pipeinit(void *dummy __unused)
@@ -481,6 +489,7 @@ sys_pipe2(struct thread *td, struct pipe2_args *uap)
 	return (error);
 }
 
+
 /*
  * Allocate kva for pipe circular buffer, the space is pageable
  * This routine will 'realloc' the size of a pipe safely, if it fails
@@ -504,11 +513,17 @@ retry:
 		size = cnt;
 
 	size = round_page(size);
+#ifndef __rtems__
 	buffer = (caddr_t) vm_map_min(pipe_map);
 
 	error = vm_map_find(pipe_map, NULL, 0, (vm_offset_t *)&buffer, size, 0,
 	    VMFS_ANY_SPACE, VM_PROT_RW, VM_PROT_RW, 0);
 	if (error != KERN_SUCCESS) {
+#else /* __rtems__ */
+	(void)error;
+	buffer = malloc(size, M_TEMP, M_WAITOK | M_ZERO);
+	if (buffer == NULL) {
+#endif /* __rtems__ */
 		if ((cpipe->pipe_buffer.buffer == NULL) &&
 			(size > SMALL_PIPE_SIZE)) {
 			size = SMALL_PIPE_SIZE;
@@ -609,8 +624,10 @@ pipeselwakeup(struct pipe *cpipe)
 		if (!SEL_WAITING(&cpipe->pipe_sel))
 			cpipe->pipe_state &= ~PIPE_SEL;
 	}
+#ifndef __rtems__
 	if ((cpipe->pipe_state & PIPE_ASYNC) && cpipe->pipe_sigio)
 		pgsigio(&cpipe->pipe_sigio, SIGIO, 0);
+#endif /* __rtems__ */
 	KNOTE_LOCKED(&cpipe->pipe_sel.si_note, 0);
 }
 
@@ -1488,10 +1505,17 @@ pipe_stat(struct file *fp, struct stat *ub, struct ucred *active_cred,
 	ub->st_atim = pipe->pipe_atime;
 	ub->st_mtim = pipe->pipe_mtime;
 	ub->st_ctim = pipe->pipe_ctime;
+#ifndef __rtems__
 	ub->st_uid = fp->f_cred->cr_uid;
 	ub->st_gid = fp->f_cred->cr_gid;
 	ub->st_dev = pipedev_ino;
 	ub->st_ino = pipe->pipe_ino;
+#else /* __rtems__ */
+	ub->st_uid = BSD_DEFAULT_UID;
+	ub->st_gid = BSD_DEFAULT_GID;
+	ub->st_dev = rtems_filesystem_make_dev_t(0xcc494cd6U, 0x1d970b4dU);
+	ub->st_ino = pipe->pipe_ino;
+#endif /* __rtems__ */
 	/*
 	 * Left as 0: st_nlink, st_rdev, st_flags, st_gen.
 	 */
@@ -1564,9 +1588,13 @@ pipe_free_kmem(struct pipe *cpipe)
 
 	if (cpipe->pipe_buffer.buffer != NULL) {
 		atomic_subtract_long(&amountpipekva, cpipe->pipe_buffer.size);
+#ifndef __rtems__
 		vm_map_remove(pipe_map,
 		    (vm_offset_t)cpipe->pipe_buffer.buffer,
 		    (vm_offset_t)cpipe->pipe_buffer.buffer + cpipe->pipe_buffer.size);
+#else /* __rtems__ */
+		free(cpipe->pipe_buffer.buffer, M_TEMP);
+#endif /* __rtems__ */
 		cpipe->pipe_buffer.buffer = NULL;
 	}
 #ifndef PIPE_NODIRECT

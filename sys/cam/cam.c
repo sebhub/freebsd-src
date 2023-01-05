@@ -330,6 +330,7 @@ camstatusentrycomp(const void *key, const void *member)
 }
 
 
+#ifndef __rtems__
 #ifdef _KERNEL
 char *
 cam_error_string(union ccb *ccb, char *str, int str_len,
@@ -592,3 +593,4 @@ cam_calc_geometry(struct ccb_calc_geometry *ccg, int extended)
 	ccg->cylinders = ccg->volume_size / secs_per_cylinder;
 	ccg->ccb_h.status = CAM_REQ_CMP;
 }
+#endif /* __rtems__ */

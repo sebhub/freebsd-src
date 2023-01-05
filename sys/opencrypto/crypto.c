@@ -237,6 +237,7 @@ static struct keybuf empty_keybuf = {
 static void
 keybuf_init(void)
 {
+#ifndef __rtems__
 	caddr_t kmdp;
 
 	kmdp = preload_search_by_type("elf kernel");
@@ -248,6 +249,7 @@ keybuf_init(void)
 	    MODINFO_METADATA | MODINFOMD_KEYBUF);
 
         if (keybuf == NULL)
+#endif /* __rtems__ */
                 keybuf = &empty_keybuf;
 }
 
@@ -371,10 +373,15 @@ crypto_terminate(struct proc **pp, void *q)
 	*pp = NULL;
 	if (p) {
 		wakeup_one(q);
+#ifndef __rtems__
 		PROC_LOCK(p);		/* NB: insure we don't miss wakeup */
 		CRYPTO_DRIVER_UNLOCK();	/* let crypto_finis progress */
 		msleep(p, &p->p_mtx, PWAIT, "crypto_destroy", 0);
 		PROC_UNLOCK(p);
+#else /* __rtems__ */
+		/* FIXME: The hacks with the PROC_LOCK() do not work on RTEMS */
+		BSD_ASSERT(0);
+#endif /* __rtems__ */
 		CRYPTO_DRIVER_LOCK();
 	}
 }
@@ -1503,9 +1510,11 @@ crypto_proc(void)
 	u_int32_t hid;
 	int result, hint;
 
+#ifndef __rtems__
 #if defined(__i386__) || defined(__amd64__) || defined(__aarch64__)
 	fpu_kern_thread(FPU_KERN_NORMAL);
 #endif
+#endif /* __rtems__ */
 
 	CRYPTO_Q_LOCK();
 	for (;;) {

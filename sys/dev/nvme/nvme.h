@@ -37,10 +37,16 @@
 
 #include <sys/param.h>
 #include <sys/endian.h>
+#ifdef __rtems__
+#include <sys/_iovec.h>
+#endif /* __rtems__ */
 
 #define	NVME_PASSTHROUGH_CMD		_IOWR('n', 0, struct nvme_pt_command)
 #define	NVME_RESET_CONTROLLER		_IO('n', 1)
 #define	NVME_GET_NSID			_IOR('n', 2, struct nvme_get_nsid)
+#ifdef __rtems__
+#define	NVME_GET_NAMESPACE		_IOR('n', 10, struct nvme_namespace *)
+#endif /* __rtems__ */
 
 #define	NVME_IO_TEST			_IOWR('n', 100, struct nvme_io_test)
 #define	NVME_BIO_TEST			_IOWR('n', 101, struct nvme_io_test)
@@ -487,6 +493,20 @@ enum nvme_critical_warning_state {
 #define	NVME_SS_PAGE_SSTAT_PASSES_MASK			(0x1f)
 #define	NVME_SS_PAGE_SSTAT_GDE_SHIFT			(8)
 #define	NVME_SS_PAGE_SSTAT_GDE_MASK			(0x1)
+
+/* SGL descriptor field definitions */
+#define	NVME_SGL_IDENT_TYPE_DATA_BLOCK			(0)
+#define	NVME_SGL_IDENT_TYPE_BIT_BUCKET			(1)
+#define	NVME_SGL_IDENT_TYPE_SEG_DESC			(2)
+#define	NVME_SGL_IDENT_TYPE_LAST_SEG_DESC		(3)
+#define	NVME_SGL_IDENT_TYPE_KEYED_DATA_BLOCK		(4)
+#define	NVME_SGL_IDENT_TYPE_VENDOR			(0xf)
+#define	NVME_SGL_IDENT_TYPE_SHIFT			(4)
+#define	NVME_SGL_IDENT_TYPE_MASK			(0xf)
+#define	NVME_SGL_IDENT_SUB_TYPE_ADDRESS			(0)
+#define	NVME_SGL_IDENT_SUB_TYPE_OFFSET			(0x1)
+#define	NVME_SGL_IDENT_SUB_TYPE_SHIFT			(0)
+#define	NVME_SGL_IDENT_SUB_TYPE_MASK			(0xf)
 
 /* CC register SHN field values */
 enum shn_value {
@@ -1451,6 +1471,16 @@ struct nvme_resv_status_ext
 
 _Static_assert(sizeof(struct nvme_resv_status_ext) == 64, "bad size for nvme_resv_status_ext");
 
+struct nvme_sgl_desc
+{
+	uint64_t		address;
+	uint32_t		length;
+	uint8_t			reserved12[3];
+	uint8_t			sgl_ident;
+} __packed __aligned(8);
+
+_Static_assert(sizeof(struct nvme_sgl_desc) == 16, "bad size for nvme_sgl_desc");
+
 #define NVME_TEST_MAX_THREADS	128
 
 struct nvme_io_test {
@@ -1540,6 +1570,10 @@ struct nvme_hmb_desc {
 #define nvme_completion_is_error(cpl)					\
 	(NVME_STATUS_GET_SC((cpl)->status) != 0 || NVME_STATUS_GET_SCT((cpl)->status) != 0)
 
+#ifdef __rtems__
+/* This function is also used by user-space programs */
+#define	nvme_strvis _bsd_nvme_strvis
+#endif /* __rtems__ */
 void	nvme_strvis(uint8_t *dst, const uint8_t *src, int dstlen, int srclen);
 
 #ifdef _KERNEL
@@ -1591,11 +1625,23 @@ int	nvme_ns_cmd_write(struct nvme_namespace *ns, void *payload,
 			  void *cb_arg);
 int	nvme_ns_cmd_write_bio(struct nvme_namespace *ns, struct bio *bp,
 			      nvme_cb_fn_t cb_fn, void *cb_arg);
+#ifdef __rtems__
+int	nvme_ns_cmd_write_iov(struct nvme_namespace *ns,
+			      const struct iovec *iov, uint64_t lba,
+			      uint32_t lba_count, nvme_cb_fn_t cb_fn,
+			      void *cb_arg);
+#endif /* __rtems__ */
 int	nvme_ns_cmd_read(struct nvme_namespace *ns, void *payload,
 			 uint64_t lba, uint32_t lba_count, nvme_cb_fn_t cb_fn,
 			 void *cb_arg);
 int	nvme_ns_cmd_read_bio(struct nvme_namespace *ns, struct bio *bp,
 			      nvme_cb_fn_t cb_fn, void *cb_arg);
+#ifdef __rtems__
+int	nvme_ns_cmd_read_iov(struct nvme_namespace *ns,
+			     const struct iovec *iov, uint64_t lba,
+			     uint32_t lba_count, nvme_cb_fn_t cb_fn,
+			     void *cb_arg);
+#endif /* __rtems__ */
 int	nvme_ns_cmd_deallocate(struct nvme_namespace *ns, void *payload,
 			       uint8_t num_ranges, nvme_cb_fn_t cb_fn,
 			       void *cb_arg);

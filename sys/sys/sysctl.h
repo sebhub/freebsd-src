@@ -231,8 +231,13 @@ void sysctl_enable_oid(struct sysctl_oid *oidp);
 void sysctl_unregister_oid(struct sysctl_oid *oidp);
 
 /* Declare a static oid to allow child oids to be added to it. */
+#ifndef __rtems__
 #define	SYSCTL_DECL(name)			\
 	extern struct sysctl_oid sysctl__##name
+#else /* __rtems__ */
+#define	SYSCTL_DECL(name)			\
+	extern struct sysctl_oid _bsd_sysctl__##name
+#endif /* __rtems__ */
 
 /* Hide these in macros. */
 #define	SYSCTL_CHILDREN(oid_ptr)		(&(oid_ptr)->oid_children)
@@ -240,7 +245,11 @@ void sysctl_unregister_oid(struct sysctl_oid *oidp);
     (((oid_ptr)->oid_parent != &sysctl__children) ?		\
 	__containerof((oid_ptr)->oid_parent, struct sysctl_oid,	\
 	oid_children) : (struct sysctl_oid *)NULL)
+#ifndef __rtems__
 #define	SYSCTL_STATIC_CHILDREN(oid_name)	(&sysctl__##oid_name.oid_children)
+#else /* __rtems__ */
+#define	SYSCTL_STATIC_CHILDREN(oid_name)	(&_bsd_sysctl__##oid_name.oid_children)
+#endif /* __rtems__ */
 
 /* === Structs and macros related to context handling. === */
 
@@ -252,8 +261,13 @@ struct sysctl_ctx_entry {
 
 TAILQ_HEAD(sysctl_ctx_list, sysctl_ctx_entry);
 
+#ifndef __rtems__
 #define	SYSCTL_NODE_CHILDREN(parent, name) \
 	sysctl__##parent##_##name.oid_children
+#else /* __rtems__ */
+#define	SYSCTL_NODE_CHILDREN(parent, name) \
+	_bsd_sysctl__##parent##_##name.oid_children
+#endif /* __rtems__ */
 
 #ifndef NO_SYSCTL_DESCR
 #define	__DESCR(d) d
@@ -283,27 +297,50 @@ TAILQ_HEAD(sysctl_ctx_list, sysctl_ctx_entry);
 	SYSCTL_OID_WITH_LABEL(parent, nbr, name, kind, a1, a2,		\
 	    handler, fmt, descr, NULL)
 
+#ifndef __rtems__
 #define	SYSCTL_OID_WITH_LABEL(parent, nbr, name, kind, a1, a2, handler, fmt, descr, label) \
     static SYSCTL_OID_RAW(sysctl__##parent##_##name,			\
 	SYSCTL_CHILDREN(&sysctl__##parent),				\
 	nbr, #name, kind, a1, a2, handler, fmt, descr, label)
+#else /* __rtems__ */
+#define	SYSCTL_OID_WITH_LABEL(parent, nbr, name, kind, a1, a2, handler, fmt, descr, label) \
+    static SYSCTL_OID_RAW(_bsd_sysctl__##parent##_##name,			\
+	SYSCTL_CHILDREN(&_bsd_sysctl__##parent),				\
+	nbr, #name, kind, a1, a2, handler, fmt, descr, label)
+#endif /* __rtems__ */
 
 /* This constructs a global "raw" MIB oid. */
+#ifndef __rtems__
 #define	SYSCTL_OID_GLOBAL(parent, nbr, name, kind, a1, a2, handler, fmt, descr, label) \
     SYSCTL_OID_RAW(sysctl__##parent##_##name, \
 	SYSCTL_CHILDREN(&sysctl__##parent),	\
 	nbr, #name, kind, a1, a2, handler, fmt, descr, label)
+#else /* __rtems__ */
+#define	SYSCTL_OID_GLOBAL(parent, nbr, name, kind, a1, a2, handler, fmt, descr, label) \
+    SYSCTL_OID_RAW(_bsd_sysctl__##parent##_##name, \
+	SYSCTL_CHILDREN(&_bsd_sysctl__##parent),	\
+	nbr, #name, kind, a1, a2, handler, fmt, descr, label)
+#endif /* __rtems__ */
 
 #define	SYSCTL_ADD_OID(ctx, parent, nbr, name, kind, a1, a2, handler, fmt, descr) \
 	sysctl_add_oid(ctx, parent, nbr, name, kind, a1, a2, handler, fmt, __DESCR(descr), NULL)
 
 /* This constructs a root node from which other nodes can hang. */
+#ifndef __rtems__
 #define	SYSCTL_ROOT_NODE(nbr, name, access, handler, descr)	\
 	SYSCTL_OID_RAW(sysctl___##name, &sysctl__children,	\
 	    nbr, #name, CTLTYPE_NODE|(access), NULL, 0,		\
 	    handler, "N", descr, NULL);				\
 	CTASSERT(((access) & CTLTYPE) == 0 ||			\
 	    ((access) & SYSCTL_CT_ASSERT_MASK) == CTLTYPE_NODE)
+#else /* __rtems__ */
+#define	SYSCTL_ROOT_NODE(nbr, name, access, handler, descr)	\
+	SYSCTL_OID_RAW(_bsd_sysctl___##name, &sysctl__children,	\
+	    nbr, #name, CTLTYPE_NODE|(access), NULL, 0,		\
+	    handler, "N", descr, NULL);				\
+	CTASSERT(((access) & CTLTYPE) == 0 ||			\
+	    ((access) & SYSCTL_CT_ASSERT_MASK) == CTLTYPE_NODE)
+#endif /* __rtems__ */
 
 /* This constructs a node from which other oids can hang. */
 #define	SYSCTL_NODE(parent, nbr, name, access, handler, descr) \
@@ -1035,6 +1072,9 @@ TAILQ_HEAD(sysctl_ctx_list, sysctl_ctx_entry);
 /*
  * Declare some common oids.
  */
+#ifdef __rtems__
+#define sysctl__children _bsd_sysctl__children
+#endif /* __rtems__ */
 extern struct sysctl_oid_list sysctl__children;
 SYSCTL_DECL(_kern);
 SYSCTL_DECL(_kern_features);
@@ -1089,14 +1129,24 @@ int	sysctl_ctx_entry_del(struct sysctl_ctx_list *clist,
 	    struct sysctl_oid *oidp);
 
 int	kernel_sysctl(struct thread *td, int *name, u_int namelen, void *old,
+#ifndef __rtems__
 	    size_t *oldlenp, void *new, size_t newlen, size_t *retval,
+#else /* __rtems__ */
+	    size_t *oldlenp, const void *newp, size_t newlen, size_t *retval,
+#endif /* __rtems__ */
 	    int flags);
 int	kernel_sysctlbyname(struct thread *td, char *name, void *old,
+#ifndef __rtems__
 	    size_t *oldlenp, void *new, size_t newlen, size_t *retval,
+#else /* __rtems__ */
+	    size_t *oldlenp, const void *newp, size_t newlen, size_t *retval,
+#endif /* __rtems__ */
 	    int flags);
+#ifndef __rtems__
 int	userland_sysctl(struct thread *td, int *name, u_int namelen, void *old,
 	    size_t *oldlenp, int inkernel, void *new, size_t newlen,
 	    size_t *retval, int flags);
+#endif /* __rtems__ */
 int	sysctl_find_oid(int *name, u_int namelen, struct sysctl_oid **noid,
 	    int *nindx, struct sysctl_req *req);
 void	sysctl_wlock(void);

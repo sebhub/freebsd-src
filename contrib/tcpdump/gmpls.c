@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that: (1) source code
@@ -190,3 +194,6 @@ const struct tok diffserv_te_bc_values[] = {
     {  DIFFSERV_BC_MODEL_EXTD_MAM, "Maximum allocation with E-LSP support"},
     { 0, NULL }
 };
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-gmpls-data.h"
+#endif /* __rtems__ */

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1989, 1990, 1991, 1993, 1994, 1995, 1996, 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -288,3 +292,6 @@ compressed_sl_print(netdissect_options *ndo,
 trunc:
 	return -1;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-sl-data.h"
+#endif /* __rtems__ */

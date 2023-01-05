@@ -811,6 +811,9 @@ smc_intr(void *context)
 	uint32_t curbank;
 
 	sc = (struct smc_softc *)context;
+#ifdef __rtems__
+	SMC_LOCK(sc);
+#endif /* __rtems__ */
 
 	/*
 	 * Save current bank and restore later in this function
@@ -825,6 +828,9 @@ smc_intr(void *context)
 
 	/* Restore bank */
 	smc_select_bank(sc, curbank);
+#ifdef __rtems__
+	SMC_UNLOCK(sc);
+#endif /* __rtems__ */
 
 	taskqueue_enqueue(sc->smc_tq, &sc->smc_intr);
 	return (FILTER_HANDLED);

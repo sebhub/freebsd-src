@@ -34,6 +34,7 @@
 #define	_USB_FREEBSD_H_
 
 /* Default USB configuration */
+#ifndef __rtems__
 #define	USB_HAVE_UGEN 1
 #define	USB_HAVE_DEVCTL 1
 #define	USB_HAVE_BUSDMA 1
@@ -53,6 +54,7 @@
 #define	USB_HAVE_FIXED_CONFIG 0
 #define	USB_HAVE_FIXED_PORT 0
 #define	USB_HAVE_DISABLE_ENUM 1
+#endif /* __rtems__ */
 
 /* define zero ticks callout value */
 #define	USB_CALLOUT_ZERO_TICKS 1

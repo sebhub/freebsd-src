@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*	$NetBSD: print-tcp.c,v 1.9 2007/07/26 18:15:12 plunky Exp $	*/
 
 /*
@@ -924,3 +928,6 @@ USES_APPLE_RST
  * c-basic-offset: 8
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-tcp-data.h"
+#endif /* __rtems__ */

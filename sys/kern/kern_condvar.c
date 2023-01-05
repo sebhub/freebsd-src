@@ -212,6 +212,7 @@ _cv_wait_unlock(struct cv *cvp, struct lock_object *lock)
 int
 _cv_wait_sig(struct cv *cvp, struct lock_object *lock)
 {
+#ifndef __rtems__
 	WITNESS_SAVE_DECL(lock_witness);
 	struct lock_class *class;
 	struct thread *td;
@@ -262,6 +263,11 @@ _cv_wait_sig(struct cv *cvp, struct lock_object *lock)
 	}
 
 	return (rval);
+#else /* __rtems__ */
+	_cv_wait(cvp, lock);
+
+	return (0);
+#endif /* __rtems__ */
 }
 
 /*
@@ -324,6 +330,7 @@ _cv_timedwait_sbt(struct cv *cvp, struct lock_object *lock, sbintime_t sbt,
 	return (rval);
 }
 
+#ifndef __rtems__
 /*
  * Wait on a condition variable for (at most) the value specified in sbt 
  * argument, allowing interruption by signals.
@@ -386,6 +393,7 @@ _cv_timedwait_sig_sbt(struct cv *cvp, struct lock_object *lock,
 
 	return (rval);
 }
+#endif /* __rtems__ */
 
 /*
  * Signal a condition variable, wakes up one waiting thread.  Will also wakeup

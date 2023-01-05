@@ -57,11 +57,19 @@ __FBSDID("$FreeBSD$");
 #ifdef __arm__
 #include <machine/intr.h>
 
+#ifndef __rtems__
 #include <arm/freescale/imx/imx_ccmvar.h>
+#else /* __rtems__ */
+uint32_t imx_ccm_sdhci_hz(void);
+#endif /* __rtems__ */
 #endif
 
 #ifdef __powerpc__
+#ifndef __rtems__
 #include <powerpc/mpc85xx/mpc85xx.h>
+#else /* __rtems__ */
+uint32_t mpc85xx_get_system_clock(void);
+#endif /* __rtems__ */
 #endif
 
 #include <dev/gpio/gpiobusvar.h>
@@ -178,6 +186,7 @@ struct fsl_sdhci_softc {
 static struct ofw_compat_data compat_data[] = {
 	{"fsl,imx6q-usdhc",	HWTYPE_USDHC},
 	{"fsl,imx6sl-usdhc",	HWTYPE_USDHC},
+	{"fsl,imx6sx-usdhc",	HWTYPE_USDHC},
 	{"fsl,imx53-esdhc",	HWTYPE_ESDHC},
 	{"fsl,imx51-esdhc",	HWTYPE_ESDHC},
 	{"fsl,esdhc",		HWTYPE_ESDHC},

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1990, 1991, 1993, 1994, 1995, 1996, 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -1093,3 +1097,6 @@ client_fqdn_flags(u_int flags)
 
 	return buf;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-bootp-data.h"
+#endif /* __rtems__ */

@@ -45,6 +45,9 @@
 #include <cam/ata/ata_all.h>
 #include <cam/nvme/nvme_all.h>
 #include <cam/mmc/mmc_all.h>
+#ifdef __rtems__
+#include <rtems/blkdev.h>
+#endif /* __rtems__ */
 
 /* General allocation length definitions for CCB structures */
 #define	IOCDBLEN	CAM_MAX_CDBLEN	/* Space for CDB bytes/pointer */
@@ -337,26 +340,36 @@ typedef struct {
 } ccb_qos_area;
 
 struct ccb_hdr {
+#ifndef __rtems__
 	cam_pinfo	pinfo;		/* Info for priority scheduling */
 	camq_entry	xpt_links;	/* For chaining in the XPT layer */
 	camq_entry	sim_links;	/* For chaining in the SIM layer */
 	camq_entry	periph_links;	/* For chaining in the type driver */
+#else /* __rtems__ */
+	struct cam_sim	*sim;
+#endif /* __rtems__ */
 	u_int32_t	retry_count;
 	void		(*cbfcnp)(struct cam_periph *, union ccb *);
 					/* Callback on completion function */
 	xpt_opcode	func_code;	/* XPT function code */
 	u_int32_t	status;		/* Status returned by CAM subsystem */
+#ifndef __rtems__
 	struct		cam_path *path;	/* Compiled path for this ccb */
 	path_id_t	path_id;	/* Path ID for the request */
+#endif /* __rtems__ */
 	target_id_t	target_id;	/* Target device ID */
 	lun_id_t	target_lun;	/* Target LUN number */
 	u_int32_t	flags;		/* ccb_flags */
 	u_int32_t	xflags;		/* Extended flags */
+#ifndef __rtems__
 	ccb_ppriv_area	periph_priv;
 	ccb_spriv_area	sim_priv;
 	ccb_qos_area	qos;
+#endif /* __rtems__ */
 	u_int32_t	timeout;	/* Hard timeout value in mseconds */
+#ifndef __rtems__
 	struct timeval	softtimeout;	/* Soft timeout value in sec + usec */
+#endif /* __rtems__ */
 };
 
 /* Get Device Information CCB */
@@ -759,6 +772,12 @@ struct ccb_scsiio {
 #if defined(BUF_TRACKING) || defined(FULL_BUF_TRACKING)
 	struct bio *bio;		/* Associated bio */
 #endif
+#ifdef __rtems__
+	int readop;
+	rtems_blkdev_sg_buffer *sg_current;
+	rtems_blkdev_sg_buffer *sg_end;
+	rtems_blkdev_request *req;
+#endif /* __rtems__ */
 };
 
 static __inline uint8_t *
@@ -859,6 +878,10 @@ typedef enum {
 	AC_UNSOL_RESEL		= 0x002,/* Unsolicited reselection occurred */
 	AC_BUS_RESET		= 0x001	/* A SCSI bus reset occurred */
 } ac_code;
+
+#ifdef __rtems__
+struct cam_path;
+#endif /* __rtems__ */
 
 typedef void ac_callback_t (void *softc, u_int32_t code,
 			    struct cam_path *path, void *args);

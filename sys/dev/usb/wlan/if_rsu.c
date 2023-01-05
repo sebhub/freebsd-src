@@ -29,6 +29,9 @@ __FBSDID("$FreeBSD$");
 
 #include "opt_wlan.h"
 
+#ifdef __rtems__
+#define __LINUX_ERRNO_EXTENSIONS__
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/endian.h>
 #include <sys/sockio.h>

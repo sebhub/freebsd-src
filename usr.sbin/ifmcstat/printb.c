@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifmcstat-namespace.h"
+#include "rtems-bsd-ifmcstat-printb-data.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *

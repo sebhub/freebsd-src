@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*	$NetBSD: print-ah.c,v 1.4 1996/05/20 00:41:16 fvdl Exp $	*/
 
 /*
@@ -625,6 +629,9 @@ void esp_print_decodesecret(netdissect_options *ndo)
 {
 	char *line;
 	char *p;
+#ifdef __rtems__
+	__section(".rtemsrwset.bsd_prog_tcpdump.content")
+#endif /* __rtems__ */
 	static int initialized = 0;
 
 	if (!initialized) {
@@ -876,3 +883,6 @@ USES_APPLE_RST
  * c-basic-offset: 8
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-esp-data.h"
+#endif /* __rtems__ */

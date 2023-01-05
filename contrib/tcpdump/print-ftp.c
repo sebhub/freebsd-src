@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that: (1) source code
@@ -30,3 +34,6 @@ ftp_print(netdissect_options *ndo, const u_char *pptr, u_int len)
 {
 	txtproto_print(ndo, pptr, len, "ftp", NULL, 0);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-ftp-data.h"
+#endif /* __rtems__ */

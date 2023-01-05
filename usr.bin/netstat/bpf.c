@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-netstat-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
  *
@@ -26,6 +30,9 @@
  * SUCH DAMAGE.
  */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -53,9 +60,13 @@ __FBSDID("$FreeBSD$");
 #include <libxo/xo.h>
 
 #include "netstat.h"
+#ifdef __rtems__
+#include "rtems-bsd-netstat-bpf-data.h"
+#endif /* __rtems__ */
 
 /* print bpf stats */
 
+#ifndef __rtems__
 static char *
 bpf_pidname(pid_t pid)
 {
@@ -75,6 +86,7 @@ bpf_pidname(pid_t pid)
 	}
 	return (strdup(newkp.ki_comm));
 }
+#endif /* __rtems__ */
 
 static void
 bpf_flags(struct xbpf_d *bd, char *flagbuf)
@@ -86,7 +98,9 @@ bpf_flags(struct xbpf_d *bd, char *flagbuf)
 	*flagbuf++ = (bd->bd_direction == BPF_D_IN) ? '-' :
 	    ((bd->bd_direction == BPF_D_OUT) ? 'o' : 's');
 	*flagbuf++ = bd->bd_feedback ? 'b' : '-';
+#ifndef __rtems__
 	*flagbuf++ = bd->bd_async ? 'a' : '-';
+#endif /* __rtems__ */
 	*flagbuf++ = bd->bd_locked ? 'l' : '-';
 	*flagbuf++ = '\0';
 
@@ -100,8 +114,10 @@ bpf_flags(struct xbpf_d *bd, char *flagbuf)
 	    (bd->bd_direction == BPF_D_OUT) ? "output" : "bidirectional");
 	if (bd->bd_feedback)
 		xo_emit("{e:feedback/}");
+#ifndef __rtems__
 	if (bd->bd_async)
 		xo_emit("{e:async/}");
+#endif /* __rtems__ */
 	if (bd->bd_locked)
 		xo_emit("{e:locked/}");
 }
@@ -152,7 +168,11 @@ bpf_stats(char *ifname)
 		if (ifname && strcmp(ifname, d->bd_ifname) != 0)
 			continue;
 		xo_open_instance("bpf-entry");
+#ifndef __rtems__
 		pname = bpf_pidname(d->bd_pid);
+#else /* __rtems__ */
+		pname = "??????";
+#endif /* __rtems__ */
 		xo_emit("{k:pid/%5d} {k:interface-name/%6s} ",
 		    d->bd_pid, d->bd_ifname);
 		bpf_flags(d, flagbuf);
@@ -162,7 +182,9 @@ bpf_stats(char *ifname)
 		    "{:process/%s}\n",
 		    flagbuf, (uintmax_t)d->bd_rcount, (uintmax_t)d->bd_dcount,
 		    (uintmax_t)d->bd_fcount, d->bd_slen, d->bd_hlen, pname);
+#ifndef __rtems__
 		free(pname);
+#endif /* __rtems__ */
 		xo_close_instance("bpf-entry");
 	}
 	xo_close_list("bpf-entry");

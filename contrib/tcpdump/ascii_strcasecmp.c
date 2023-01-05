@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1987 Regents of the University of California.
  * All rights reserved.
@@ -103,3 +107,6 @@ ascii_strncasecmp(const char *s1, const char *s2, register size_t n)
 	}
 	return(cm[*us1] - cm[*--us2]);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-ascii_strcasecmp-data.h"
+#endif /* __rtems__ */

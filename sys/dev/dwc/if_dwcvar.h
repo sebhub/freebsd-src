@@ -45,13 +45,24 @@
  * Driver data and defines.
  */
 #define	RX_MAX_PACKET	0x7ff
+#ifndef __rtems__
 #define	RX_DESC_COUNT	1024
+#else /* __rtems__ */
+#define	RX_DESC_COUNT	64
+#endif /* __rtems__ */
 #define	RX_DESC_SIZE	(sizeof(struct dwc_hwdesc) * RX_DESC_COUNT)
+#ifndef __rtems__
 #define	TX_DESC_COUNT	1024
+#else /* __rtems__ */
+#define	TX_DESC_COUNT	256
+#endif /* __rtems__ */
 #define	TX_DESC_SIZE	(sizeof(struct dwc_hwdesc) * TX_DESC_COUNT)
+#define	TX_MAX_DMA_SEGS	8	/* maximum segs in a tx mbuf dma */
 
 struct dwc_bufmap {
+#ifndef __rtems__
 	bus_dmamap_t		map;
+#endif /* __rtems__ */
 	struct mbuf		*mbuf;
 };
 
@@ -79,8 +90,10 @@ struct dwc_softc {
 	bus_dma_tag_t		rxdesc_tag;
 	bus_dmamap_t		rxdesc_map;
 	struct dwc_hwdesc	*rxdesc_ring;
+#ifndef __rtems__
 	bus_addr_t		rxdesc_ring_paddr;
 	bus_dma_tag_t		rxbuf_tag;
+#endif /* __rtems__ */
 	struct dwc_bufmap	rxbuf_map[RX_DESC_COUNT];
 	uint32_t		rx_idx;
 
@@ -88,8 +101,10 @@ struct dwc_softc {
 	bus_dma_tag_t		txdesc_tag;
 	bus_dmamap_t		txdesc_map;
 	struct dwc_hwdesc	*txdesc_ring;
+#ifndef __rtems__
 	bus_addr_t		txdesc_ring_paddr;
 	bus_dma_tag_t		txbuf_tag;
+#endif /* __rtems__ */
 	struct dwc_bufmap	txbuf_map[TX_DESC_COUNT];
 	uint32_t		tx_idx_head;
 	uint32_t		tx_idx_tail;

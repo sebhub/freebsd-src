@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1995, 1996, 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -256,3 +260,6 @@ krb_print(netdissect_options *ndo,
 	}
 	return;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-krb-data.h"
+#endif /* __rtems__ */

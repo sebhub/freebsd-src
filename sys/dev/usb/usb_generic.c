@@ -183,8 +183,10 @@ ugen_open(struct usb_fifo *f, int fflags)
 	struct usb_endpoint_descriptor *ed = ep->edesc;
 	uint8_t type;
 
+#ifndef __rtems__
 	DPRINTFN(1, "flag=0x%x pid=%d name=%s\n", fflags,
 	    curthread->td_proc->p_pid, curthread->td_proc->p_comm);
+#endif /* __rtems__ */
 
 	mtx_lock(f->priv_mtx);
 	switch (usbd_get_speed(f->udev)) {
@@ -215,8 +217,10 @@ static void
 ugen_close(struct usb_fifo *f, int fflags)
 {
 
+#ifndef __rtems__
 	DPRINTFN(1, "flag=0x%x pid=%d name=%s\n", fflags,
 	    curthread->td_proc->p_pid, curthread->td_proc->p_comm);
+#endif /* __rtems__ */
 
 	/* cleanup */
 

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (C) Andrew Tridgell 1995-1999
  *
@@ -1925,3 +1929,6 @@ nt_errstr(uint32_t err)
     snprintf(ret, sizeof(ret), "0x%08x", err);
     return ret;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-smbutil-data.h"
+#endif /* __rtems__ */

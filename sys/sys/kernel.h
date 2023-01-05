@@ -59,8 +59,10 @@
 
 /* Global variables for the kernel. */
 
+#ifndef __rtems__
 /* 1.1 */
 extern char kernelname[MAXPATHLEN];
+#endif /* __rtems__ */
 
 extern int tick;			/* usec per tick (1000000 / hz) */
 extern int hz;				/* system clock's frequency */
@@ -261,6 +263,7 @@ sysinit_tslog_shim(const void * data)
 	};							\
 	DATA_WSET(sysinit_set,uniquifier ## _sys_init)
 #else
+#ifndef __rtems__
 #define	C_SYSINIT(uniquifier, subsystem, order, func, ident)	\
 	static struct sysinit uniquifier ## _sys_init = {	\
 		subsystem,					\
@@ -269,6 +272,31 @@ sysinit_tslog_shim(const void * data)
 		(ident)						\
 	};							\
 	DATA_WSET(sysinit_set,uniquifier ## _sys_init)
+#else /* __rtems__ */
+#define	SYSINIT_ENTRY_NAME(uniquifier)				\
+	_bsd_ ## uniquifier ## _sys_init
+#define	SYSINIT_REFERENCE_NAME(uniquifier)			\
+	_bsd_ ## uniquifier ## _sys_init_ref
+#define	C_SYSINIT(uniquifier, subsystem, order, func, ident)	\
+	struct sysinit SYSINIT_ENTRY_NAME(uniquifier) = {	\
+		subsystem,					\
+		order,						\
+		func,						\
+		(ident)						\
+	};							\
+	DATA_WSET(sysinit_set,SYSINIT_ENTRY_NAME(uniquifier))
+#define	SYSINIT_REFERENCE(uniquifier)				\
+	extern struct sysinit SYSINIT_ENTRY_NAME(uniquifier);	\
+	static struct sysinit const * const			\
+	SYSINIT_REFERENCE_NAME(uniquifier) __used		\
+	= &SYSINIT_ENTRY_NAME(uniquifier)
+#define	SYSINIT_MODULE_REFERENCE(mod)				\
+	SYSINIT_REFERENCE(mod ## module)
+#define	SYSINIT_DRIVER_REFERENCE(driver, bus)			\
+	SYSINIT_MODULE_REFERENCE(driver ## _ ## bus)
+#define	SYSINIT_DOMAIN_REFERENCE(dom)				\
+	SYSINIT_REFERENCE(domain_add_ ## dom)
+#endif /* __rtems__ */
 #endif
 
 #define	SYSINIT(uniquifier, subsystem, order, func, ident)	\
@@ -278,6 +306,7 @@ sysinit_tslog_shim(const void * data)
 /*
  * Called on module unload: no special processing
  */
+#ifndef __rtems__
 #define	C_SYSUNINIT(uniquifier, subsystem, order, func, ident)	\
 	static struct sysinit uniquifier ## _sys_uninit = {	\
 		subsystem,					\
@@ -286,6 +315,9 @@ sysinit_tslog_shim(const void * data)
 		(ident)						\
 	};							\
 	DATA_WSET(sysuninit_set,uniquifier ## _sys_uninit)
+#else /* __rtems__ */
+#define	C_SYSUNINIT(uniquifier, subsystem, order, func, ident)
+#endif /* __rtems__ */
 
 #define	SYSUNINIT(uniquifier, subsystem, order, func, ident)	\
 	C_SYSUNINIT(uniquifier, subsystem, order,		\
@@ -293,6 +325,7 @@ sysinit_tslog_shim(const void * data)
 
 void	sysinit_add(struct sysinit **set, struct sysinit **set_end);
 
+#ifndef __rtems__
 /*
  * Infrastructure for tunable 'constants'.  Value may be specified at compile
  * time or kernel load time.  Rules relating tunables together can be placed
@@ -435,6 +468,20 @@ struct tunable_str {
 
 #define	TUNABLE_STR_FETCH(path, var, size)			\
 	getenv_string((path), (var), (size))
+#else /* __rtems__ */
+#define TUNABLE_INT(path, var)
+#define TUNABLE_INT_FETCH(path, var)
+#define TUNABLE_LONG(path, var)
+#define TUNABLE_LONG_FETCH(path, var)
+#define TUNABLE_ULONG(path, var)
+#define TUNABLE_ULONG_FETCH(path, var)
+#define TUNABLE_UINT64(path, var)
+#define TUNABLE_UINT64_FETCH(path, var)
+#define TUNABLE_QUAD(path, var)
+#define TUNABLE_QUAD_FETCH(path, var)
+#define TUNABLE_STR(path, var, size)
+#define TUNABLE_STR_FETCH(path, var, size)
+#endif /* __rtems__ */
 
 typedef void (*ich_func_t)(void *_arg);
 

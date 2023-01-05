@@ -62,30 +62,51 @@ extern int	_fseeko(FILE *, off_t, int, int);
 extern int	__fflush(FILE *fp);
 extern void	__fcloseall(void);
 extern wint_t	__fgetwc_mbs(FILE *, mbstate_t *, int *, locale_t);
+#ifndef __rtems__
 extern wint_t	__fputwc(wchar_t, FILE *, locale_t);
+#endif /* __rtems__ */
 extern int	__sflush(FILE *);
 extern FILE	*__sfp(void);
 extern int	__slbexpand(FILE *, size_t);
+#ifndef __rtems__
 extern int	__srefill(FILE *);
+#else /* __rtems__ */
+/*
+ * __srefill is used by fgetln().  The method is in newlib but the
+ * prototype is in a private .h which is not installed.
+ * allows it to be pulled from newlib.
+ */
+extern int __srefill_r(struct _reent *,FILE *);
+
+#define __srefill(_x) __srefill_r(_REENT, _x)
+#endif /* __rtems__ */
 extern int	__sread(void *, char *, int);
 extern int	__swrite(void *, char const *, int);
 extern fpos_t	__sseek(void *, fpos_t, int);
 extern int	__sclose(void *);
+#ifndef __rtems__
 extern void	__sinit(void);
+#endif /* __rtems__ */
 extern void	_cleanup(void);
 extern void	__smakebuf(FILE *);
 extern int	__swhatbuf(FILE *, size_t *, int *);
 extern int	_fwalk(int (*)(FILE *));
+#ifndef __rtems__
 extern int	__svfscanf(FILE *, locale_t, const char *, __va_list);
+#endif /* __rtems__ */
 extern int	__swsetup(FILE *);
 extern int	__sflags(const char *, int *);
 extern int	__ungetc(int, FILE *);
+#ifndef __rtems__
 extern wint_t	__ungetwc(wint_t, FILE *, locale_t);
 extern int	__vfprintf(FILE *, locale_t, const char *, __va_list);
+#endif /* __rtems__ */
 extern int	__vfscanf(FILE *, const char *, __va_list);
+#ifndef __rtems__
 extern int	__vfwprintf(FILE *, locale_t, const wchar_t *, __va_list);
 extern int	__vfwscanf(FILE * __restrict, locale_t, const wchar_t * __restrict,
 		    __va_list);
+#endif /* __rtems__ */
 extern size_t	__fread(void * __restrict buf, size_t size, size_t count,
 		FILE * __restrict fp);
 extern int	__sdidinit;
@@ -139,6 +160,9 @@ __fgetwc(FILE *fp, locale_t locale)
  * Set the orientation for a stream. If o > 0, the stream has wide-
  * orientation. If o < 0, the stream has byte-orientation.
  */
+#ifdef __rtems__
+#define	ORIENT(fp, o)
+#else /* __rtems__ */
 #define	ORIENT(fp, o)	do {				\
 	if ((fp)->_orientation == 0)			\
 		(fp)->_orientation = (o);		\
@@ -165,4 +189,5 @@ void __stdio_cancel_cleanup(void *);
 		___pthread_cleanup_pop_imp(1);				\
 	}
 
+#endif /* __rtems__ */
 #endif /* _STDIO_LOCAL_H */

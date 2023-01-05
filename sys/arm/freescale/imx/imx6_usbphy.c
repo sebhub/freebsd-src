@@ -47,9 +47,16 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/bus.h>
 
+#ifndef __rtems__
 #include <arm/freescale/imx/imx_ccmvar.h>
+#else /* __rtems__ */
+void imx_ccm_usbphy_enable(device_t _phydev);
+#endif /* __rtems__ */
 #include <arm/freescale/imx/imx6_anatopreg.h>
 #include <arm/freescale/imx/imx6_anatopvar.h>
+#ifdef __rtems__
+#include <dev/extres/regulator/regulator.h>
+#endif /* __rtems__ */
 
 /*
  * Hardware register defines.
@@ -68,6 +75,9 @@ struct usbphy_softc {
 	device_t	dev;
 	struct resource	*mem_res;
 	u_int		phy_num;
+#ifdef __rtems__
+	regulator_t		supply_vbus;
+#endif /* __rtems__ */
 };
 
 static struct ofw_compat_data compat_data[] = {
@@ -89,11 +99,26 @@ usbphy_detach(device_t dev)
 	return (0);
 }
 
+#ifdef __rtems__
+#define BUS_SPACE_PHYSADDR(res, offs) \
+	((u_int)(rman_get_start(res)+(offs)))
+
+void
+imx6_anatop_write_4(bus_size_t offset, uint32_t value)
+{
+
+	bus_space_write_4(0, 0x20c8000, offset, value);
+}
+#endif /* __rtems__ */
 static int
 usbphy_attach(device_t dev)
 {
 	struct usbphy_softc *sc;
 	int err, regoff, rid;
+#ifdef __rtems__
+	int rv;
+	phandle_t node;
+#endif /* __rtems__ */
 
 	sc = device_get_softc(dev);
 	err = 0;
@@ -108,6 +133,27 @@ usbphy_attach(device_t dev)
 		goto out;
 	}
 
+#ifdef __rtems__
+	node = ofw_bus_get_node(dev);
+	if (OF_hasprop(node, "vbus-supply")) {
+		rv = regulator_get_by_ofw_property(sc->dev, node, "vbus-supply",
+		    &sc->supply_vbus);
+		if (rv != 0) {
+			device_printf(sc->dev,
+			   "Cannot get \"vbus\" regulator\n");
+			err = ENXIO;
+			goto out;
+		}
+		rv = regulator_enable(sc->supply_vbus);
+		if (rv != 0) {
+			device_printf(sc->dev,
+			    "Cannot enable  \"vbus\" regulator\n");
+			err = ENXIO;
+			goto out;
+		}
+	}
+
+#endif /* __rtems__ */
 	/*
 	 * XXX Totally lame way to get the unit number (but not quite as lame as
 	 * adding an ad-hoc property to the fdt data).  This works as long as

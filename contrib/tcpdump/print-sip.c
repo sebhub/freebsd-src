@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that: (1) source code
@@ -52,3 +56,6 @@ sip_print(netdissect_options *ndo, const u_char *pptr, u_int len)
 {
 	txtproto_print(ndo, pptr, len, "sip", sipcmds, RESP_CODE_SECOND_TOKEN);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-sip-data.h"
+#endif /* __rtems__ */

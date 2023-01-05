@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-netstat-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -36,6 +40,9 @@ static char sccsid[] = "@(#)if.c	8.3 (Berkeley) 4/28/95";
 #endif /* not lint */
 #endif
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -75,6 +82,9 @@ __FBSDID("$FreeBSD$");
 #include <libxo/xo.h>
 
 #include "netstat.h"
+#ifdef __rtems__
+#include "rtems-bsd-netstat-if-data.h"
+#endif /* __rtems__ */
 
 static void sidewaysintpr(void);
 
@@ -500,6 +510,7 @@ intpr(void (*pfunc)(char *), int af)
 		freeifmaddrs(ifmap);
 }
 
+#ifndef __rtems__
 struct iftot {
 	u_long	ift_ip;			/* input packets */
 	u_long	ift_ie;			/* input errors */
@@ -563,6 +574,7 @@ catchalarm(int signo __unused)
 {
 	signalled = true;
 }
+#endif /* __rtems__ */
 
 /*
  * Print a running summary of interface statistics.
@@ -573,6 +585,7 @@ catchalarm(int signo __unused)
 static void
 sidewaysintpr(void)
 {
+#ifndef __rtems__
 	struct iftot ift[2], *new, *old;
 	struct itimerval interval_it;
 	int oldmask, line;
@@ -654,4 +667,5 @@ loop:
 		goto loop;
 
 	/* NOTREACHED */
+#endif /* __rtems__ */
 }

@@ -57,6 +57,9 @@
 
 #ifndef DEV_MMC_MMCREG_H
 #define	DEV_MMC_MMCREG_H
+#ifdef __rtems__
+#include <rtems/thread.h>
+#endif /* __rtems__ */
 
 /*
  * This file contains the register definitions for the mmc and sd buses.
@@ -206,8 +209,13 @@ struct mmc_request {
 	void (*done)(struct mmc_request *); /* Completion function */
 	void *done_data;		/* requestor set data */
 	uint32_t flags;
+#ifndef __rtems__
 #define	MMC_REQ_DONE	1
+#endif /* __rtems__ */
 #define	MMC_TUNE_DONE	2
+#ifdef __rtems__
+	rtems_binary_semaphore req_done;
+#endif /* __rtems__ */
 };
 
 /* Command definitions */

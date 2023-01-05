@@ -206,7 +206,7 @@ enum nss_lookup_type {
 typedef struct _ns_dbt {
 	const char	*name;		/* name of database */
 	ns_src		*srclist;	/* list of sources */
-	int		 srclistsize;	/* size of srclist */
+	unsigned int	 srclistsize;	/* size of srclist */
 } ns_dbt;
 
 /*
@@ -217,7 +217,9 @@ typedef struct _ns_mod {
 	void		*handle;	/* handle from dlopen */
 	ns_mtab		*mtab;		/* method table */
 	unsigned int	 mtabsize;	/* count of entries in method table */
+#ifndef __rtems__
 	nss_module_unregister_fn unregister; /* called to unload module */
+#endif /* __rtems__ */
 } ns_mod;
 
 #endif /* _NS_PRIVATE */
@@ -240,6 +242,22 @@ extern	int		 _nsyylineno;
 extern	void		 _nsdbtdump(const ns_dbt *);
 #endif
 #endif /* _NS_PRIVATE */
+#ifdef __rtems__
+/**
+ * @brief Registers a name service module.
+ *
+ * @param[in] source The source identifier.
+ * @param[in] mtab The module table.  This table will be claimed by the name
+ *   service dispatcher.
+ * @param[in] mtabsize The module table entry count.
+ *
+ * @retval 0 Successful operation.
+ * @retval -1 An error occurred.  The errno is set to indicate the error.
+ */
+int
+rtems_nss_register_module(const char *source, ns_mtab *mtab,
+    unsigned int mtabsize);
+#endif /* __rtems__ */
 
 __END_DECLS
 

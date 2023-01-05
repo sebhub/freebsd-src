@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1990, 1991, 1993, 1994, 1995, 1996, 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -1874,3 +1878,6 @@ printx:
  * c-basic-offset: 8
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-ppp-data.h"
+#endif /* __rtems__ */

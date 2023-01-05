@@ -229,6 +229,7 @@ retry:
 	return (0);
 }
 
+#ifndef __rtems__
 static int
 kread(kvm_t *kvm, void *kvm_pointer, void *address, size_t size,
     size_t offset)
@@ -416,3 +417,4 @@ memstat_kvm_malloc(struct memory_type_list *list, void *kvm_handle)
 
 	return (0);
 }
+#endif /* __rtems__ */

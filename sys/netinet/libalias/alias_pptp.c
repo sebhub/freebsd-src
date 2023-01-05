@@ -133,6 +133,9 @@ protohandlergreout(struct libalias *la, struct ip *pip, struct alias_data *ah)
 }
 
 /* Kernel module definition. */
+#ifdef __rtems__
+static
+#endif /* __rtems__ */
 struct proto_handler handlers[] = {
 	{
 	  .pri = 200,

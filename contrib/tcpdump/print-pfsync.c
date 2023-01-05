@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2012 Gleb Smirnoff <glebius@FreeBSD.org>
  * Copyright (c) 2002 Michael Shalayeff
@@ -109,6 +113,9 @@ static void	pfsync_print_del_c(netdissect_options *, const void *);
 static void	pfsync_print_bus(netdissect_options *, const void *);
 static void	pfsync_print_tdb(netdissect_options *, const void *);
 
+#ifdef __rtems__
+static const
+#endif /* __rtems__ */
 struct pfsync_actions actions[] = {
 	{ "clear all", sizeof(struct pfsync_clr),	pfsync_print_clr },
 	{ "insert", sizeof(struct pfsync_state),	pfsync_print_state },
@@ -457,3 +464,6 @@ print_state(netdissect_options *ndo, struct pfsync_state *s)
 		    (uintmax_t )be64toh(id), ntohl(s->creatorid)));
 	}
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-pfsync-data.h"
+#endif /* __rtems__ */

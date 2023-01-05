@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
  *
@@ -30,6 +34,9 @@ static const char rcsid[] =
   "$FreeBSD$";
 #endif /* not lint */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -44,6 +51,9 @@ static const char rcsid[] =
 #include <unistd.h>
 
 #include "ifconfig.h"
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-ifgroup-data.h"
+#endif /* __rtems__ */
 
 /* ARGSUSED */
 static void
@@ -54,7 +64,12 @@ setifgroup(const char *group_name, int d, int s, const struct afswtch *rafp)
 	memset(&ifgr, 0, sizeof(ifgr));
 	strlcpy(ifgr.ifgr_name, name, IFNAMSIZ);
 
+#ifndef __rtems__
 	if (group_name[0] && isdigit(group_name[strlen(group_name) - 1]))
+#else /* __rtems__ */
+	if (group_name[0] && isdigit(
+	    (unsigned char)group_name[strlen(group_name) - 1]))
+#endif /* __rtems__ */
 		errx(1, "setifgroup: group names may not end in a digit");
 
 	if (strlcpy(ifgr.ifgr_group, group_name, IFNAMSIZ) >= IFNAMSIZ)
@@ -72,7 +87,12 @@ unsetifgroup(const char *group_name, int d, int s, const struct afswtch *rafp)
 	memset(&ifgr, 0, sizeof(ifgr));
 	strlcpy(ifgr.ifgr_name, name, IFNAMSIZ);
 
+#ifndef __rtems__
 	if (group_name[0] && isdigit(group_name[strlen(group_name) - 1]))
+#else /* __rtems__ */
+	if (group_name[0] && isdigit(
+	    (unsigned char)group_name[strlen(group_name) - 1]))
+#endif /* __rtems__ */
 		errx(1, "unsetifgroup: group names may not end in a digit");
 
 	if (strlcpy(ifgr.ifgr_group, group_name, IFNAMSIZ) >= IFNAMSIZ)
@@ -173,7 +193,11 @@ static struct afswtch af_group = {
 };
 static struct option group_gopt = { "g:", "[-g groupname]", printgroup };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+void
+#endif /* __rtems__ */
 group_ctor(void)
 {
 	int i;

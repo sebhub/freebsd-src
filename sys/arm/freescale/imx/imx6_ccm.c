@@ -49,7 +49,14 @@ __FBSDID("$FreeBSD$");
 #include <arm/freescale/imx/imx6_anatopvar.h>
 #include <arm/freescale/imx/imx6_ccmreg.h>
 #include <arm/freescale/imx/imx_machdep.h>
+#ifndef __rtems__
 #include <arm/freescale/imx/imx_ccmvar.h>
+#else /* __rtems__ */
+#include <bsp.h>
+#ifdef LIBBSP_ARM_IMX_BSP_H
+#include <arm/freescale/imx/imx_ccmvar.h>
+#endif /* LIBBSP_ARM_IMX_BSP_H */
+#endif /* __rtems__ */
 
 #ifndef CCGR_CLK_MODE_ALWAYS
 #define	CCGR_CLK_MODE_OFF		0
@@ -90,6 +97,7 @@ WR4(struct ccm_softc *sc, bus_size_t off, uint32_t val)
 static void
 ccm_init_gates(struct ccm_softc *sc)
 {
+#ifndef __rtems__
 	uint32_t reg;
 
  	/* ahpbdma, aipstz 1 & 2 buses */
@@ -127,6 +135,7 @@ ccm_init_gates(struct ccm_softc *sc)
 	reg = CCGR6_USBOH3 | CCGR6_USDHC1 | CCGR6_USDHC2 |
 	    CCGR6_USDHC3 | CCGR6_USDHC4;
 	WR4(sc, CCM_CCGR6, reg);
+#endif /* __rtems__ */
 }
 
 static int
@@ -202,7 +211,12 @@ ccm_probe(device_t dev)
 	if (!ofw_bus_status_okay(dev))
 		return (ENXIO);
 
+#ifndef __rtems__
         if (ofw_bus_is_compatible(dev, "fsl,imx6q-ccm") == 0)
+#else /* __rtems__ */
+        if (ofw_bus_is_compatible(dev, "fsl,imx6q-ccm") == 0 &&
+	    ofw_bus_is_compatible(dev, "fsl,imx6ul-ccm") == 0)
+#endif /* __rtems__ */
 		return (ENXIO);
 
 	device_set_desc(dev, "Freescale i.MX6 Clock Control Module");
@@ -352,6 +366,7 @@ imx6_ccm_sata_enable(void)
 	return 0;
 }
 
+#ifndef __rtems__
 uint32_t
 imx_ccm_ecspi_hz(void)
 {
@@ -392,6 +407,7 @@ imx_ccm_ahb_hz(void)
 {
 	return (132000000);
 }
+#endif /* __rtems__ */
 
 void
 imx_ccm_ipu_enable(int ipu)

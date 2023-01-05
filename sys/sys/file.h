@@ -149,6 +149,10 @@ struct fileops {
 #endif /* _KERNEL */
 
 #if defined(_KERNEL) || defined(_WANT_FILE)
+#ifdef __rtems__
+#include <rtems/libio_.h>
+#include <sys/fcntl.h>
+#endif /* __rtems__ */
 /*
  * Kernel descriptor table.
  * One entry for each open kernel vnode and socket.
@@ -197,6 +201,9 @@ struct file {
 	 * Mandatory Access control information.
 	 */
 	void		*f_label;	/* Place-holder for MAC label. */
+#ifdef __rtems__
+	rtems_libio_t	*f_io;
+#endif /* __rtems__ */
 };
 
 #define	f_cdevpriv	f_vnun.fvn_cdevpriv
@@ -236,10 +243,16 @@ struct xfile {
 extern struct fileops vnops;
 extern struct fileops badfileops;
 extern struct fileops socketops;
+#ifndef __rtems__
 extern int maxfiles;		/* kernel limit on number of open files */
 extern int maxfilesperproc;	/* per process limit on number of open files */
+#else /* __rtems__ */
+#define	maxfiles rtems_libio_number_iops
+#define	maxfilesperproc rtems_libio_number_iops
+#endif /* __rtems__ */
 extern volatile int openfiles;	/* actual number of open files */
 
+#ifndef __rtems__
 int fget(struct thread *td, int fd, cap_rights_t *rightsp, struct file **fpp);
 int fget_mmap(struct thread *td, int fd, cap_rights_t *rightsp,
     u_char *maxprotp, struct file **fpp);
@@ -250,6 +263,51 @@ int fget_write(struct thread *td, int fd, cap_rights_t *rightsp,
 int fget_fcntl(struct thread *td, int fd, cap_rights_t *rightsp,
     int needfcntl, struct file **fpp);
 int _fdrop(struct file *fp, struct thread *td);
+#else /* __rtems__ */
+int rtems_bsd_fget(int fd, struct file **fpp, int flags);
+
+static inline int
+fget(struct thread *td, int fd, cap_rights_t *rightsp, struct file **fpp)
+{
+	struct file *fp;
+
+	(void)td;
+	(void)rightsp;
+	return (rtems_bsd_fget(fd, fpp, LIBIO_FLAGS_OPEN));
+}
+
+static inline int
+fget_read(struct thread *td, int fd, cap_rights_t *rightsp, struct file **fpp)
+{
+	struct file *fp;
+
+	(void)td;
+	(void)rightsp;
+	return (rtems_bsd_fget(fd, fpp, LIBIO_FLAGS_OPEN | LIBIO_FLAGS_READ));
+}
+
+static inline int
+fget_write(struct thread *td, int fd, cap_rights_t *rightsp, struct file **fpp)
+{
+	struct file *fp;
+
+	(void)td;
+	(void)rightsp;
+	return (rtems_bsd_fget(fd, fpp, LIBIO_FLAGS_OPEN | LIBIO_FLAGS_WRITE));
+}
+
+static inline int
+fget_fcntl(struct thread *td, int fd, cap_rights_t *rightsp, int needfcntl,
+    struct file **fpp)
+{
+	struct file *fp;
+
+	(void)td;
+	(void)needfcntl;
+	(void)rightsp;
+	return (rtems_bsd_fget(fd, fpp, LIBIO_FLAGS_OPEN));
+}
+#endif /* __rtems__ */
 
 fo_rdwr_t	invfo_rdwr;
 fo_truncate_t	invfo_truncate;
@@ -262,10 +320,41 @@ fo_sendfile_t	invfo_sendfile;
 
 fo_sendfile_t	vn_sendfile;
 fo_seek_t	vn_seek;
+#ifndef __rtems__
 fo_fill_kinfo_t	vn_fill_kinfo;
 int vn_fill_kinfo_vnode(struct vnode *vp, struct kinfo_file *kif);
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 void finit(struct file *, u_int, short, void *, struct fileops *);
+#else /* __rtems__ */
+static inline void
+finit(struct file *fp, u_int flag, short type, void *data, struct fileops *ops)
+{
+	uint32_t libio_flags;
+
+	fp->f_data = data;
+	fp->f_flag = flag;
+	fp->f_type = type;
+	fp->f_ops = ops;
+
+	libio_flags = LIBIO_FLAGS_OPEN;
+
+	if ((flag & FREAD) == FREAD) {
+		libio_flags |= LIBIO_FLAGS_READ;
+	}
+
+	if ((flag & FWRITE) == FWRITE) {
+		libio_flags |= LIBIO_FLAGS_WRITE;
+	}
+
+	if ((flag & FNONBLOCK) == FNONBLOCK) {
+		libio_flags |= LIBIO_FLAGS_NO_DELAY;
+	}
+
+        rtems_libio_iop_flags_set(fp->f_io, libio_flags);
+}
+#endif /* __rtems__ */
 int fgetvp(struct thread *td, int fd, cap_rights_t *rightsp,
     struct vnode **vpp);
 int fgetvp_exec(struct thread *td, int fd, cap_rights_t *rightsp,
@@ -277,6 +366,7 @@ int fgetvp_read(struct thread *td, int fd, cap_rights_t *rightsp,
 int fgetvp_write(struct thread *td, int fd, cap_rights_t *rightsp,
     struct vnode **vpp);
 
+#ifndef __rtems__
 static __inline int
 _fnoop(void)
 {
@@ -292,6 +382,19 @@ fhold(struct file *fp)
 
 #define	fdrop(fp, td)							\
 	(refcount_release(&(fp)->f_count) ? _fdrop((fp), (td)) : _fnoop())
+#else /* __rtems__ */
+/*
+ * Must not be called after falloc_caps().  The file reference counting in
+ * RTEMS and FreeBSD work slightly different.
+ */
+static inline void
+fdrop(struct file *fp, struct thread *td)
+{
+
+	(void)td;
+	rtems_libio_iop_drop(fp->f_io);
+}
+#endif /* __rtems__ */
 
 static __inline fo_rdwr_t	fo_read;
 static __inline fo_rdwr_t	fo_write;
@@ -425,6 +528,10 @@ fo_aio_queue(struct file *fp, struct kaiocb *job)
 
 	return ((*fp->f_ops->fo_aio_queue)(fp, job));
 }
+
+#ifdef __rtems__
+#include <machine/rtems-bsd-libio.h>
+#endif /* __rtems__ */
 
 #endif /* _KERNEL */
 

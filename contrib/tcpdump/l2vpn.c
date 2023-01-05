@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that: (1) source code
@@ -93,3 +97,6 @@ const struct tok mpls_pw_types_values[] = {
     { 0x0040, "IP-interworking"},
     { 0, NULL}
 };
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-l2vpn-data.h"
+#endif /* __rtems__ */

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (C) Andrew Tridgell 1995-1999
  *
@@ -109,6 +113,9 @@ static void
 trans2_qfsinfo(netdissect_options *ndo,
                const u_char *param, const u_char *data, int pcnt, int dcnt)
 {
+#ifdef __rtems__
+	__section(".rtemsrwset.bsd_prog_tcpdump.content")
+#endif /* __rtems__ */
     static int level = 0;
     const char *fmt="";
 
@@ -173,6 +180,9 @@ print_trans2(netdissect_options *ndo,
              const u_char *words, const u_char *dat, const u_char *buf, const u_char *maxbuf)
 {
     u_int bcc;
+#ifdef __rtems__
+	__section(".rtemsrwset.bsd_prog_tcpdump.content")
+#endif /* __rtems__ */
     static const struct smbfnsint *fn = &trans2_fns[0];
     const u_char *data, *param;
     const u_char *w = words + 1;
@@ -1503,3 +1513,6 @@ ipx_netbios_print(netdissect_options *ndo,
     if (i == 128)
 	smb_fdata(ndo, data, "\n>>> Unknown IPX ", maxbuf, 0);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-smb-data.h"
+#endif /* __rtems__ */

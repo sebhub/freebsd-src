@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-netstat-namespace.h"
+#endif /* __rtems__ */
+
 /*	$KAME: ipsec.c,v 1.33 2003/07/25 09:54:32 itojun Exp $	*/
 
 /*-
@@ -90,6 +94,9 @@ static char sccsid[] = "@(#)inet.c	8.5 (Berkeley) 5/24/95";
 #endif /* not lint */
 #endif
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -114,6 +121,9 @@ __FBSDID("$FreeBSD$");
 #include <unistd.h>
 #include <libxo/xo.h>
 #include "netstat.h"
+#ifdef __rtems__
+#include "rtems-bsd-netstat-ipsec-data.h"
+#endif /* __rtems__ */
 
 #ifdef IPSEC
 struct val2str {

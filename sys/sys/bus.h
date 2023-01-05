@@ -804,6 +804,7 @@ DECLARE_MODULE(name##_##busname, name##_##busname##_mod,		\
 /**
  * Generic ivar accessor generation macros for bus drivers
  */
+#ifndef __rtems__
 #define __BUS_ACCESSOR(varp, var, ivarp, ivar, type)			\
 									\
 static __inline type varp ## _get_ ## var(device_t dev)			\
@@ -828,6 +829,26 @@ static __inline void varp ## _set_ ## var(device_t dev, type t)		\
 	    __func__, device_get_nameunit(dev),				\
 	    device_get_nameunit(device_get_parent(dev)), e));		\
 }
+#else /* __rtems__ */
+#define __BUS_ACCESSOR(varp, var, ivarp, ivar, type)			\
+									\
+static __inline type varp ## _get_ ## var(device_t dev)			\
+{									\
+	uintptr_t v;							\
+	int err;							\
+	err = BUS_READ_IVAR(device_get_parent(dev), dev,		\
+	    ivarp ## _IVAR_ ## ivar, &v);				\
+	BSD_ASSERT(err == 0);						\
+	return ((type) v);						\
+}									\
+									\
+static __inline void varp ## _set_ ## var(device_t dev, type t)		\
+{									\
+	uintptr_t v = (uintptr_t) t;					\
+	BUS_WRITE_IVAR(device_get_parent(dev), dev,			\
+	    ivarp ## _IVAR_ ## ivar, v);				\
+}
+#endif /* __rtems__ */
 
 /**
  * Shorthand macros, taking resource argument

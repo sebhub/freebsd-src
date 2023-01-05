@@ -60,7 +60,11 @@ typedef	u_int32_t n_time;		/* ms since 00:00 UTC, byte rev */
 struct inpcb;
 struct ucred;
 
+#ifndef __rtems__
 int	cr_canseeinpcb(struct ucred *cred, struct inpcb *inp);
+#else /* __rtems__ */
+#define	cr_canseeinpcb(cred, inp) 0
+#endif /* __rtems__ */
 
 uint32_t	 iptime(void);
 #endif

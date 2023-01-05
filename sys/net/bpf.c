@@ -95,6 +95,11 @@ __FBSDID("$FreeBSD$");
 #include <net80211/ieee80211_freebsd.h>
 
 #include <security/mac/mac_framework.h>
+#ifdef __rtems__
+#include <rtems/imfs.h>
+#define devfs_get_cdevpriv(x) 0
+#define devtoname(x) "bpf"
+#endif /* __rtems__ */
 
 MALLOC_DEFINE(M_BPF, "BPF", "BPF data");
 
@@ -135,6 +140,13 @@ CTASSERT(offsetof(struct bpf_if, bif_ext) == 0);
 #define BPF_ALIGNMENT32 sizeof(int32_t)
 #define	BPF_WORDALIGN32(x) roundup2(x, BPF_ALIGNMENT32)
 
+#ifdef __rtems__
+/*
+ * This FreeBSD kernel option is broken in general, but here it is useful to
+ * get rid of some legacy support we do not need in libbsd.
+ */
+#define BURN_BRIDGES
+#endif /* __rtems__ */
 #ifndef BURN_BRIDGES
 /*
  * 32-bit version of structure prepended to each packet.  We use this header
@@ -207,9 +219,11 @@ SYSCTL_NODE(_net, OID_AUTO, bpf, CTLFLAG_RW, 0, "bpf sysctl");
 int bpf_maxinsns = BPF_MAXINSNS;
 SYSCTL_INT(_net_bpf, OID_AUTO, maxinsns, CTLFLAG_RW,
     &bpf_maxinsns, 0, "Maximum bpf program instructions");
+#ifndef __rtems__
 static int bpf_zerocopy_enable = 0;
 SYSCTL_INT(_net_bpf, OID_AUTO, zerocopy_enable, CTLFLAG_RW,
     &bpf_zerocopy_enable, 0, "Enable new zero-copy BPF buffer sessions");
+#endif /* __rtems__ */
 static SYSCTL_NODE(_net_bpf, OID_AUTO, stats, CTLFLAG_MPSAFE | CTLFLAG_RW,
     bpf_stats_sysctl, "bpf statistics portal");
 
@@ -219,6 +233,7 @@ SYSCTL_INT(_net_bpf, OID_AUTO, optimize_writers, CTLFLAG_VNET | CTLFLAG_RW,
     &VNET_NAME(bpf_optimize_writers), 0,
     "Do not send packets until BPF program is set");
 
+#ifndef __rtems__
 static	d_open_t	bpfopen;
 static	d_read_t	bpfread;
 static	d_write_t	bpfwrite;
@@ -236,6 +251,7 @@ static struct cdevsw bpf_cdevsw = {
 	.d_name =	"bpf",
 	.d_kqfilter =	bpfkqfilter,
 };
+#endif /* __rtems__ */
 
 static struct filterops bpfread_filtops = {
 	.f_isfd = 1,
@@ -290,9 +306,11 @@ bpf_append_bytes(struct bpf_d *d, caddr_t buf, u_int offset, void *src,
 	case BPF_BUFMODE_BUFFER:
 		return (bpf_buffer_append_bytes(d, buf, offset, src, len));
 
+#ifndef __rtems__
 	case BPF_BUFMODE_ZBUF:
 		counter_u64_add(d->bd_zcopy, 1);
 		return (bpf_zerocopy_append_bytes(d, buf, offset, src, len));
+#endif /* __rtems__ */
 
 	default:
 		panic("bpf_buf_append_bytes");
@@ -310,9 +328,11 @@ bpf_append_mbuf(struct bpf_d *d, caddr_t buf, u_int offset, void *src,
 	case BPF_BUFMODE_BUFFER:
 		return (bpf_buffer_append_mbuf(d, buf, offset, src, len));
 
+#ifndef __rtems__
 	case BPF_BUFMODE_ZBUF:
 		counter_u64_add(d->bd_zcopy, 1);
 		return (bpf_zerocopy_append_mbuf(d, buf, offset, src, len));
+#endif /* __rtems__ */
 
 	default:
 		panic("bpf_buf_append_mbuf");
@@ -332,9 +352,11 @@ bpf_buf_reclaimed(struct bpf_d *d)
 	case BPF_BUFMODE_BUFFER:
 		return;
 
+#ifndef __rtems__
 	case BPF_BUFMODE_ZBUF:
 		bpf_zerocopy_buf_reclaimed(d);
 		return;
+#endif /* __rtems__ */
 
 	default:
 		panic("bpf_buf_reclaimed");
@@ -352,10 +374,12 @@ bpf_canfreebuf(struct bpf_d *d)
 
 	BPFD_LOCK_ASSERT(d);
 
+#ifndef __rtems__
 	switch (d->bd_bufmode) {
 	case BPF_BUFMODE_ZBUF:
 		return (bpf_zerocopy_canfreebuf(d));
 	}
+#endif /* __rtems__ */
 	return (0);
 }
 
@@ -369,10 +393,12 @@ bpf_canwritebuf(struct bpf_d *d)
 {
 	BPFD_LOCK_ASSERT(d);
 
+#ifndef __rtems__
 	switch (d->bd_bufmode) {
 	case BPF_BUFMODE_ZBUF:
 		return (bpf_zerocopy_canwritebuf(d));
 	}
+#endif /* __rtems__ */
 	return (1);
 }
 
@@ -387,11 +413,13 @@ bpf_buffull(struct bpf_d *d)
 
 	BPFD_LOCK_ASSERT(d);
 
+#ifndef __rtems__
 	switch (d->bd_bufmode) {
 	case BPF_BUFMODE_ZBUF:
 		bpf_zerocopy_buffull(d);
 		break;
 	}
+#endif /* __rtems__ */
 }
 
 /*
@@ -403,11 +431,13 @@ bpf_bufheld(struct bpf_d *d)
 
 	BPFD_LOCK_ASSERT(d);
 
+#ifndef __rtems__
 	switch (d->bd_bufmode) {
 	case BPF_BUFMODE_ZBUF:
 		bpf_zerocopy_bufheld(d);
 		break;
 	}
+#endif /* __rtems__ */
 }
 
 static void
@@ -418,8 +448,10 @@ bpf_free(struct bpf_d *d)
 	case BPF_BUFMODE_BUFFER:
 		return (bpf_buffer_free(d));
 
+#ifndef __rtems__
 	case BPF_BUFMODE_ZBUF:
 		return (bpf_zerocopy_free(d));
+#endif /* __rtems__ */
 
 	default:
 		panic("bpf_buf_free");
@@ -448,27 +480,39 @@ static int
 bpf_ioctl_getzmax(struct thread *td, struct bpf_d *d, size_t *i)
 {
 
+#ifndef __rtems__
 	if (d->bd_bufmode != BPF_BUFMODE_ZBUF)
 		return (EOPNOTSUPP);
 	return (bpf_zerocopy_ioctl_getzmax(td, d, i));
+#else /* __rtems__ */
+	return (EOPNOTSUPP);
+#endif /* __rtems__ */
 }
 
 static int
 bpf_ioctl_rotzbuf(struct thread *td, struct bpf_d *d, struct bpf_zbuf *bz)
 {
 
+#ifndef __rtems__
 	if (d->bd_bufmode != BPF_BUFMODE_ZBUF)
 		return (EOPNOTSUPP);
 	return (bpf_zerocopy_ioctl_rotzbuf(td, d, bz));
+#else /* __rtems__ */
+	return (EOPNOTSUPP);
+#endif /* __rtems__ */
 }
 
 static int
 bpf_ioctl_setzbuf(struct thread *td, struct bpf_d *d, struct bpf_zbuf *bz)
 {
 
+#ifndef __rtems__
 	if (d->bd_bufmode != BPF_BUFMODE_ZBUF)
 		return (EOPNOTSUPP);
 	return (bpf_zerocopy_ioctl_setzbuf(td, d, bz));
+#else /* __rtems__ */
+	return (EOPNOTSUPP);
+#endif /* __rtems__ */
 }
 
 /*
@@ -884,10 +928,15 @@ bpf_dtor(void *data)
  * EBUSY if file is open by another process.
  */
 /* ARGSUSED */
+#ifndef __rtems__
 static	int
+#else /* __rtems__ */
+static struct bpf_d *
+#endif /* __rtems__ */
 bpfopen(struct cdev *dev, int flags, int fmt, struct thread *td)
 {
 	struct bpf_d *d;
+#ifndef __rtems__
 	int error;
 
 	d = malloc(sizeof(*d), M_BPF, M_WAITOK | M_ZERO);
@@ -896,6 +945,12 @@ bpfopen(struct cdev *dev, int flags, int fmt, struct thread *td)
 		free(d, M_BPF);
 		return (error);
 	}
+#else /* __rtems__ */
+	d = malloc(sizeof(*d), M_BPF, M_NOWAIT | M_ZERO);
+	if (d == NULL) {
+		return (d);
+	}
+#endif /* __rtems__ */
 
 	/* Setup counters */
 	d->bd_rcount = counter_u64_alloc(M_WAITOK);
@@ -927,16 +982,26 @@ bpfopen(struct cdev *dev, int flags, int fmt, struct thread *td)
 	callout_init_mtx(&d->bd_callout, &d->bd_lock, 0);
 	knlist_init_mtx(&d->bd_sel.si_note, &d->bd_lock);
 
+#ifndef __rtems__
 	return (0);
+#else /* __rtems__ */
+	return (d);
+#endif /* __rtems__ */
 }
 
 /*
  *  bpfread - read next chunk of packets from buffers
  */
 static	int
+#ifndef __rtems__
 bpfread(struct cdev *dev, struct uio *uio, int ioflag)
+#else /* __rtems__ */
+bpfread(struct bpf_d *d, struct uio *uio, int ioflag)
+#endif /* __rtems__ */
 {
+#ifndef __rtems__
 	struct bpf_d *d;
+#endif /* __rtems__ */
 	int error;
 	int non_block;
 	int timed_out;
@@ -1079,8 +1144,10 @@ bpf_wakeup(struct bpf_d *d)
 		d->bd_state = BPF_IDLE;
 	}
 	wakeup(d);
+#ifndef __rtems__
 	if (d->bd_async && d->bd_sig && d->bd_sigio)
 		pgsigio(&d->bd_sigio, d->bd_sig, 0);
+#endif /* __rtems__ */
 
 	selwakeuppri(&d->bd_sel, PRINET);
 	KNOTE_LOCKED(&d->bd_sel.si_note, 0);
@@ -1117,9 +1184,15 @@ bpf_ready(struct bpf_d *d)
 }
 
 static int
+#ifndef __rtems__
 bpfwrite(struct cdev *dev, struct uio *uio, int ioflag)
+#else /* __rtems__ */
+bpfwrite(struct bpf_d *d, struct uio *uio, int ioflag)
+#endif /* __rtems__ */
 {
+#ifndef __rtems__
 	struct bpf_d *d;
+#endif /* __rtems__ */
 	struct ifnet *ifp;
 	struct mbuf *m, *mc;
 	struct sockaddr dst;
@@ -1276,10 +1349,17 @@ reset_d(struct bpf_d *d)
  */
 /* ARGSUSED */
 static	int
+#ifndef __rtems__
 bpfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags,
     struct thread *td)
+#else /* __rtems__ */
+bpfioctl(struct bpf_d *d, u_long cmd, caddr_t addr, int flags,
+    struct thread *td)
+#endif /* __rtems__ */
 {
+#ifndef __rtems__
 	struct bpf_d *d;
+#endif /* __rtems__ */
 	int error;
 
 	error = devfs_get_cdevpriv((void **)&d);
@@ -1723,11 +1803,13 @@ bpfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags,
 	case FIONBIO:		/* Non-blocking I/O */
 		break;
 
+#ifndef __rtems__
 	case FIOASYNC:		/* Send signal on receive packets */
 		BPFD_LOCK(d);
 		d->bd_async = *(int *)addr;
 		BPFD_UNLOCK(d);
 		break;
+#endif /* __rtems__ */
 
 	case FIOSETOWN:
 		/*
@@ -1792,10 +1874,12 @@ bpfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags,
 		case BPF_BUFMODE_BUFFER:
 			break;
 
+#ifndef __rtems__
 		case BPF_BUFMODE_ZBUF:
 			if (bpf_zerocopy_enable)
 				break;
 			/* FALLSTHROUGH */
+#endif /* __rtems__ */
 
 		default:
 			CURVNET_RESTORE();
@@ -1986,7 +2070,9 @@ bpf_setif(struct bpf_d *d, struct ifreq *ifr)
 	 */
 	switch (d->bd_bufmode) {
 	case BPF_BUFMODE_BUFFER:
+#ifndef __rtems__
 	case BPF_BUFMODE_ZBUF:
+#endif /* __rtems__ */
 		if (d->bd_sbuf == NULL)
 			return (EINVAL);
 		break;
@@ -2009,9 +2095,15 @@ bpf_setif(struct bpf_d *d, struct ifreq *ifr)
  * Otherwise, return false but make a note that a selwakeup() must be done.
  */
 static int
+#ifndef __rtems__
 bpfpoll(struct cdev *dev, int events, struct thread *td)
+#else /* __rtems__ */
+bpfpoll(struct bpf_d *d, int events, struct thread *td)
+#endif /* __rtems__ */
 {
+#ifndef __rtems__
 	struct bpf_d *d;
+#endif /* __rtems__ */
 	int revents;
 
 	if (devfs_get_cdevpriv((void **)&d) != 0 || d->bd_bif == NULL)
@@ -2045,10 +2137,19 @@ bpfpoll(struct cdev *dev, int events, struct thread *td)
  * Support for kevent() system call.  Register EVFILT_READ filters and
  * reject all others.
  */
+#ifdef __rtems__
+static
+#endif /* __rtems__ */
 int
+#ifndef __rtems__
 bpfkqfilter(struct cdev *dev, struct knote *kn)
+#else /* __rtems__ */
+bpfkqfilter(struct bpf_d *d, struct knote *kn)
+#endif /* __rtems__ */
 {
+#ifndef __rtems__
 	struct bpf_d *d;
+#endif /* __rtems__ */
 
 	if (devfs_get_cdevpriv((void **)&d) != 0 ||
 	    kn->kn_filter != EVFILT_READ)
@@ -2830,19 +2931,199 @@ bpf_setdlt(struct bpf_d *d, u_int dlt)
 	}
 	return (bp == NULL ? EINVAL : 0);
 }
+#ifdef __rtems__
+static struct bpf_d *
+bpf_imfs_get_context_by_iop(const rtems_libio_t *iop)
+{
+	return iop->data1;
+}
+
+static int
+bpf_imfs_open(rtems_libio_t *iop, const char *path, int oflag, mode_t mode)
+{
+	struct bpf_d *d;
+
+	d = bpfopen(NULL, oflag + 1, 0, NULL);
+	iop->data1 = d;
+
+	if (d != NULL) {
+		return (0);
+	} else {
+		rtems_set_errno_and_return_minus_one(ENOMEM);
+	}
+}
+
+static int
+bpf_imfs_close(rtems_libio_t *iop)
+{
+	struct bpf_d *d = bpf_imfs_get_context_by_iop(iop);
+
+	bpf_dtor(d);
+
+	return (0);
+}
+
+static ssize_t
+bpf_imfs_readv(rtems_libio_t *iop, const struct iovec *iov, int iovcnt, ssize_t total)
+{
+	struct bpf_d *d = bpf_imfs_get_context_by_iop(iop);
+	struct thread *td = rtems_bsd_get_curthread_or_null();
+	struct uio uio = {
+		.uio_iov = iov,
+		.uio_iovcnt = iovcnt,
+		.uio_offset = 0,
+		.uio_resid = total,
+		.uio_segflg = UIO_USERSPACE,
+		.uio_rw = UIO_READ,
+		.uio_td = td
+	};
+	int error;
+
+	if (td != NULL) {
+		error = bpfread(d, &uio,
+		    rtems_libio_to_fcntl_flags(iop->flags));
+	} else {
+		error = ENOMEM;
+	}
+
+	if (error == 0) {
+		return (total - uio.uio_resid);
+	} else {
+		rtems_set_errno_and_return_minus_one(error);
+	}
+}
+
+static ssize_t
+bpf_imfs_read(rtems_libio_t *iop, void *buffer, size_t count)
+{
+	struct iovec iov = {
+		.iov_base = buffer,
+		.iov_len = count
+	};
+
+	return bpf_imfs_readv(iop, &iov, 1, count);
+}
+
+static ssize_t
+bpf_imfs_writev(rtems_libio_t *iop, const struct iovec *iov, int iovcnt, ssize_t total)
+{
+	struct bpf_d *d = bpf_imfs_get_context_by_iop(iop);
+	struct thread *td = rtems_bsd_get_curthread_or_null();
+	struct uio uio = {
+		.uio_iov = iov,
+		.uio_iovcnt = iovcnt,
+		.uio_offset = 0,
+		.uio_resid = total,
+		.uio_segflg = UIO_USERSPACE,
+		.uio_rw = UIO_WRITE,
+		.uio_td = td
+	};
+	int error;
+
+	if (td != NULL) {
+		error = bpfwrite(d, &uio,
+		    rtems_libio_to_fcntl_flags(iop->flags));
+	} else {
+		error = ENOMEM;
+	}
+
+	if (error == 0) {
+		return (total - uio.uio_resid);
+	} else {
+		rtems_set_errno_and_return_minus_one(error);
+	}
+}
+
+static ssize_t
+bpf_imfs_write(rtems_libio_t *iop, const void *buffer, size_t count)
+{
+	struct iovec iov = {
+		.iov_base = buffer,
+		.iov_len = count
+	};
+
+	return bpf_imfs_writev(iop, &iov, 1, count);
+}
+
+static int
+bpf_imfs_ioctl(rtems_libio_t *iop, ioctl_command_t request, void *buffer)
+{
+	struct bpf_d *d = bpf_imfs_get_context_by_iop(iop);
+	struct thread *td = rtems_bsd_get_curthread_or_null();
+	int error;
+
+	if (td != 0) {
+		error = bpfioctl(d, request, buffer, 0, td);
+	} else {
+		error = ENOMEM;
+	}
+
+	return rtems_bsd_error_to_status_and_errno(error);
+}
+
+static int
+bpf_imfs_poll(rtems_libio_t *iop, int events)
+{
+	struct bpf_d *d = bpf_imfs_get_context_by_iop(iop);
+
+	return (bpfpoll(d, events, rtems_bsd_get_curthread_or_wait_forever()));
+}
+
+static int
+bpf_imfs_kqfilter(rtems_libio_t *iop, struct knote *kn)
+{
+	struct bpf_d *d = bpf_imfs_get_context_by_iop(iop);
+
+	return (bpfkqfilter(d, kn));
+}
+
+static const rtems_filesystem_file_handlers_r bpf_imfs_handlers = {
+	.open_h = bpf_imfs_open,
+	.close_h = bpf_imfs_close,
+	.read_h = bpf_imfs_read,
+	.write_h = bpf_imfs_write,
+	.ioctl_h = bpf_imfs_ioctl,
+	.lseek_h = rtems_filesystem_default_lseek_file,
+	.fstat_h = rtems_filesystem_default_fstat,
+	.ftruncate_h = rtems_filesystem_default_ftruncate,
+	.fsync_h = rtems_filesystem_default_fsync_or_fdatasync,
+	.fdatasync_h = rtems_filesystem_default_fsync_or_fdatasync,
+	.fcntl_h = rtems_filesystem_default_fcntl,
+	.poll_h = bpf_imfs_poll,
+	.kqfilter_h = bpf_imfs_kqfilter,
+	.readv_h = bpf_imfs_readv,
+	.writev_h = bpf_imfs_writev
+};
+
+static const IMFS_node_control bpf_imfs_control = IMFS_GENERIC_INITIALIZER(
+    &bpf_imfs_handlers, IMFS_node_initialize_generic,
+    IMFS_node_destroy_default);
+#endif /* __rtems__ */
 
 static void
 bpf_drvinit(void *unused)
 {
+#ifndef __rtems__
 	struct cdev *dev;
+#else /* __rtems__ */
+	mode_t mode = S_IFCHR | S_IRWXU | S_IRWXG | S_IRWXO;
+	int rv;
+#endif /* __rtems__ */
 
 	sx_init(&bpf_sx, "bpf global lock");
 	LIST_INIT(&bpf_iflist);
 	LIST_INIT(&bpf_freelist);
 
+#ifndef __rtems__
 	dev = make_dev(&bpf_cdevsw, 0, UID_ROOT, GID_WHEEL, 0600, "bpf");
 	/* For compatibility */
 	make_dev_alias(dev, "bpf0");
+#else /* __rtems__ */
+	rv = IMFS_make_generic_node("/dev/bpf", mode, &bpf_imfs_control, NULL);
+	BSD_ASSERT(rv == 0);
+  rv = symlink("/dev/bpf", "/dev/bpf0");
+	BSD_ASSERT(rv == 0);
+#endif /* __rtems__ */
 
 	/* Register interface departure handler */
 	bpf_ifdetach_cookie = EVENTHANDLER_REGISTER(
@@ -2895,7 +3176,9 @@ bpfstats_fill_xbpf(struct xbpf_d *d, struct bpf_d *bd)
 	d->bd_hdrcmplt = bd->bd_hdrcmplt;
 	d->bd_direction = bd->bd_direction;
 	d->bd_feedback = bd->bd_feedback;
+#ifndef __rtems__
 	d->bd_async = bd->bd_async;
+#endif /* __rtems__ */
 	d->bd_rcount = counter_u64_fetch(bd->bd_rcount);
 	d->bd_dcount = counter_u64_fetch(bd->bd_dcount);
 	d->bd_fcount = counter_u64_fetch(bd->bd_fcount);

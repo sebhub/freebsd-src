@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1998-2006 The TCPDUMP project
  *
@@ -209,3 +213,6 @@ vqp_print(netdissect_options *ndo, register const u_char *pptr, register u_int l
 trunc:
     ND_PRINT((ndo, "\n\t[|VQP]"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-vqp-data.h"
+#endif /* __rtems__ */

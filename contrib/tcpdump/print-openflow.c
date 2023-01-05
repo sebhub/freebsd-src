@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * This module implements printing of the very basic (version-independent)
  * OpenFlow header and iteration over OpenFlow messages. It is intended for
@@ -138,3 +142,6 @@ openflow_print(netdissect_options *ndo, const u_char *cp, const u_int len _U_)
 	while (cp < ndo->ndo_snapend)
 		cp = of_header_body_print(ndo, cp, ndo->ndo_snapend);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-openflow-data.h"
+#endif /* __rtems__ */

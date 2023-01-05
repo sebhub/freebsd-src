@@ -36,9 +36,11 @@ net $
 
 #include <sys/param.h>
 
+#ifndef __rtems__
 #ifndef _KERNEL
 #error This header file is meant for the FreeBSD kernel.
 #endif /* _KERNEL */
+#endif /* __rtems__ */
 
 #ifndef CK_MD_CACHELINE
 /*
@@ -126,6 +128,10 @@ net $
 /* If no memory model has been defined, assume RMO. */
 #if !defined(CK_MD_RMO) && !defined(CK_MD_TSO) && !defined(CK_MD_PSO)
 #define CK_MD_RMO
+#endif
+
+#ifdef __PPC_CPU_E6500__
+#define CK_MD_PPC32_LWSYNC
 #endif
 
 #define CK_VERSION "0.7.0"

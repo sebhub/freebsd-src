@@ -38,6 +38,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/bus.h>
 
+#ifndef __rtems__
 #define	FBACK_MDENV	0	/* MD env (e.g. loader.conf) */
 #define	FBACK_STENV	1	/* Static env */
 #define	FBACK_STATIC	2	/* static_hints */
@@ -91,6 +92,12 @@ static_hints_to_env(void *data __unused)
 
 /* Any time after dynamic env is setup */
 SYSINIT(hintenv, SI_SUB_KMEM + 1, SI_ORDER_SECOND, static_hints_to_env, NULL);
+#else /* __rtems__ */
+#define	sthints_skip false
+
+static char __used default_static_hints[] = "";
+__weak_reference(default_static_hints, static_hints);
+#endif /* __rtems__ */
 
 /*
  * Checks the environment to see if we even have any hints.  If it has no hints,
@@ -126,13 +133,18 @@ res_find(char **hintp_cookie, int *line, int *startln,
     const char **ret_name, int *ret_namelen, int *ret_unit,
     const char **ret_resname, int *ret_resnamelen, const char **ret_value)
 {
+#ifndef __rtems__
 	int fbacklvl = FBACK_MDENV, i = 0, n = 0;
+#else /* __rtems__ */
+	int n = 0;
+#endif /* __rtems__ */
 	char r_name[32];
 	int r_unit;
 	char r_resname[32];
 	char r_value[128];
 	const char *s, *cp;
 	char *hintp, *p;
+#ifndef __rtems__
 	bool dyn_used = false;
 
 
@@ -194,10 +206,14 @@ fallback:
 				/* FALLTHROUGH */
 			case FBACK_STATIC:
 				fbacklvl++;
+#else /* __rtems__ */
+				hintp = NULL;
+#endif /* __rtems__ */
 				/* We'll fallback to static_hints if needed/can */
 				if (!sthints_skip &&
 				    _res_checkenv(static_hints))
 					hintp = static_hints;
+#ifndef __rtems__
 				else
 					sthints_skip = true;
 
@@ -206,10 +222,12 @@ fallback:
 				return (ENOENT);
 			}
 		}
+#endif /* __rtems__ */
 
 		if (hintp == NULL)
 			return (ENOENT);
 		*hintp_cookie = hintp;
+#ifndef __rtems__
 	} else {
 		hintp = *hintp_cookie;
 		if (hintenv_merged && hintp == kenvp[0])
@@ -228,6 +246,7 @@ fallback:
 		mtx_lock(&kenv_lock);
 		i = 0;
 	}
+#endif /* __rtems__ */
 
 	cp = hintp;
 	while (cp) {
@@ -255,11 +274,14 @@ fallback:
 		/* Successfully found a hint matching all criteria */
 		break;
 nexthint:
+#ifndef __rtems__
 		if (dyn_used) {
 			cp = kenvp[++i];
 			if (cp == NULL)
 				break;
+			(void) i;
 		} else {
+#endif /* __rtems__ */
 			while (*cp != '\0')
 				cp++;
 			cp++;
@@ -267,12 +289,20 @@ nexthint:
 				cp = NULL;
 				break;
 			}
+#ifndef __rtems__
 		}
+#endif /* __rtems__ */
 	}
+#ifndef __rtems__
 	if (dyn_used)
 		mtx_unlock(&kenv_lock);
+#endif /* __rtems__ */
 	if (cp == NULL)
+#ifndef __rtems__
 		goto fallback;
+#else /* __rtems__ */
+		return (ENOENT);
+#endif /* __rtems__ */
 
 	s = cp;
 	/* This is a bit of a hack, but at least is reentrant */
@@ -356,6 +386,7 @@ resource_int_value(const char *name, int unit, const char *resname, int *result)
 	return 0;
 }
 
+#ifndef __rtems__
 int
 resource_long_value(const char *name, int unit, const char *resname,
     long *result)
@@ -379,6 +410,7 @@ resource_long_value(const char *name, int unit, const char *resname,
 	*result = val;
 	return 0;
 }
+#endif /* __rtems__ */
 
 int
 resource_string_value(const char *name, int unit, const char *resname,
@@ -449,6 +481,7 @@ resource_find_match(int *anchor, const char **name, int *unit,
 	return ret;
 }
 
+#ifndef __rtems__
 
 /*
  * err = resource_find_dev(&anchor, name, &unit, res, value);
@@ -474,6 +507,7 @@ resource_find_dev(int *anchor, const char *name, int *unit,
 	*anchor = newln;
 	return ret;
 }
+#endif /* __rtems__ */
 
 /*
  * Check to see if a device is disabled via a disabled hint.
@@ -514,5 +548,9 @@ resource_unset_value(const char *name, int unit, const char *resname)
 		return (ENAMETOOLONG);
 	memcpy(varname, retname, len);
 	varname[len] = '\0';
+#ifndef __rtems__
 	return (kern_unsetenv(varname));
+#else /* __rtems__ */
+	return (0);
+#endif /* __rtems__ */
 }

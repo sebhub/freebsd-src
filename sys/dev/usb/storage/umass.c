@@ -464,7 +464,9 @@ static void	umass_cbi_start_status(struct umass_softc *);
 static void	umass_t_cbi_data_clear_stall_callback(struct usb_xfer *,
 		    uint8_t, uint8_t, usb_error_t);
 static int	umass_cam_attach_sim(struct umass_softc *);
+#ifndef __rtems__
 static void	umass_cam_attach(struct umass_softc *);
+#endif /* __rtems__ */
 static void	umass_cam_detach_sim(struct umass_softc *);
 static void	umass_cam_action(struct cam_sim *, union ccb *);
 static void	umass_cam_poll(struct cam_sim *);
@@ -717,7 +719,9 @@ DRIVER_MODULE(umass, uhub, umass_driver, umass_devclass, NULL, 0);
 MODULE_DEPEND(umass, usb, 1, 1, 1);
 MODULE_DEPEND(umass, cam, 1, 1, 1);
 MODULE_VERSION(umass, 1);
+#ifndef __rtems__
 USB_PNP_HOST_INFO(umass_devs);
+#endif /* __rtems__ */
 
 /*
  * USB device probe/attach/detach
@@ -1047,8 +1051,10 @@ umass_attach(device_t dev)
 	if (err) {
 		goto detach;
 	}
+#ifndef __rtems__
 	/* scan the SIM */
 	umass_cam_attach(sc);
+#endif /* __rtems__ */
 
 	DPRINTF(sc, UDMASS_GEN, "Attach finished\n");
 
@@ -2113,6 +2119,7 @@ umass_cam_attach_sim(struct umass_softc *sc)
 	return (0);
 }
 
+#ifndef __rtems__
 static void
 umass_cam_attach(struct umass_softc *sc)
 {
@@ -2123,6 +2130,7 @@ umass_cam_attach(struct umass_softc *sc)
 		    sc->sc_name, cam_sim_path(sc->sc_sim),
 		    sc->sc_unit, cam_sim_path(sc->sc_sim));
 }
+#endif /* __rtems__ */
 
 /* umass_cam_detach
  *	detach from the CAM layer
@@ -2395,12 +2403,14 @@ umass_cam_action(struct cam_sim *sim, union ccb *ccb)
 			xpt_done(ccb);
 			break;
 		}
+#ifndef __rtems__
 	case XPT_CALC_GEOMETRY:
 		{
 			cam_calc_geometry(&ccb->ccg, /* extended */ 1);
 			xpt_done(ccb);
 			break;
 		}
+#endif /* __rtems__ */
 	case XPT_NOOP:
 		{
 			DPRINTF(sc, UDMASS_SCSI, "%d:%d:%jx:XPT_NOOP:.\n",

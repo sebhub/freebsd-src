@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1992, 1993, 1994, 1995, 1996, 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -1011,3 +1015,6 @@ ospf6_print(netdissect_options *ndo,
 trunc:
 	ND_PRINT((ndo, "%s", tstr));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-ospf6-data.h"
+#endif /* __rtems__ */

@@ -90,7 +90,11 @@ rn_mpath_next(struct radix_node *rn)
 		return NULL;
 }
 
+#ifndef __rtems__
 uint32_t
+#else /* __rtems__ */
+u_int32_t
+#endif /* __rtems__ */
 rn_mpath_count(struct radix_node *rn)
 {
 	uint32_t i = 0;

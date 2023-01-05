@@ -3557,12 +3557,14 @@ sctp_inpcb_free(struct sctp_inpcb *inp, int immediate, int from)
 		SCTP_INP_INFO_WUNLOCK();
 		return;
 	}
+#ifndef __rtems__
 	if (SCTP_INP_LOCK_CONTENDED(inp))
 		being_refed++;
 	if (SCTP_INP_READ_CONTENDED(inp))
 		being_refed++;
 	if (SCTP_ASOC_CREATE_LOCK_CONTENDED(inp))
 		being_refed++;
+#endif
 
 	if ((inp->refcount) ||
 	    (being_refed) ||

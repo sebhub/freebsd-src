@@ -191,8 +191,13 @@ int     kern_nanosleep(struct thread *td, struct timespec *rqt,
 	    struct timespec *rmt);
 int	kern_ogetdirentries(struct thread *td, struct ogetdirentries_args *uap,
 	    long *ploff);
+#ifndef __rtems__
 int	kern_openat(struct thread *td, int fd, char *path,
 	    enum uio_seg pathseg, int flags, int mode);
+#else /* __rtems__ */
+int	kern_openat(struct thread *td, int fd, char *path,
+	    enum uio_seg pathseg, int flags, int mode, struct file *fp);
+#endif /* __rtems__ */
 int	kern_pathconf(struct thread *td, char *path, enum uio_seg pathseg,
 	    int name, u_long flags, long *valuep);
 int	kern_pipe(struct thread *td, int fildes[2], int flags,

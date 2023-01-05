@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2015 The TCPDUMP project
  * All rights reserved.
@@ -540,3 +544,6 @@ invalid:
     *endp = bp;
     return (-5);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-resp-data.h"
+#endif /* __rtems__ */

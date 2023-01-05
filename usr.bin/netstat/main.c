@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-netstat-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -41,6 +45,12 @@ static char sccsid[] = "@(#)main.c	8.4 (Berkeley) 3/1/94";
 #endif /* not lint */
 #endif
 
+#ifdef __rtems__
+#define __need_getopt_newlib
+#include <getopt.h>
+#include <machine/rtems-bsd-program.h>
+#include <machine/rtems-bsd-commands.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -74,8 +84,15 @@ __FBSDID("$FreeBSD$");
 #include "netstat.h"
 #include "nl_defs.h"
 #include <libxo/xo.h>
+#ifdef __rtems__
+#include "rtems-bsd-netstat-main-data.h"
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 static struct protox {
+#else /* __rtems__ */
+static const struct protox {
+#endif /* __rtems__ */
 	int	pr_index;		/* index into nlist of cb head */
 	int	pr_sindex;		/* index into nlist of stat block */
 	u_char	pr_wanted;		/* 1 if wanted, 0 otherwise */
@@ -133,7 +150,11 @@ static struct protox {
 };
 
 #ifdef INET6
+#ifndef __rtems__
 static struct protox ip6protox[] = {
+#else /* __rtems__ */
+static const struct protox ip6protox[] = {
+#endif /* __rtems__ */
 	{ N_TCBINFO,	N_TCPSTAT,	1,	protopr,
 	  tcp_stats,	NULL,		"tcp",	1,	IPPROTO_TCP },
 	{ N_UDBINFO,	N_UDPSTAT,	1,	protopr,
@@ -162,7 +183,11 @@ static struct protox ip6protox[] = {
 #endif /*INET6*/
 
 #ifdef IPSEC
+#ifndef __rtems__
 static struct protox pfkeyprotox[] = {
+#else /* __rtems__ */
+static const struct protox pfkeyprotox[] = {
+#endif /* __rtems__ */
 	{ -1,		N_PFKEYSTAT,	1,	NULL,
 	  pfkey_stats,	NULL,		"pfkey", 0,	0 },
 	{ -1,		-1,		0,	NULL,
@@ -171,7 +196,11 @@ static struct protox pfkeyprotox[] = {
 #endif
 
 #ifdef NETGRAPH
+#ifndef __rtems__
 static struct protox netgraphprotox[] = {
+#else /* __rtems__ */
+static const struct protox netgraphprotox[] = {
+#endif /* __rtems__ */
 	{ N_NGSOCKLIST,	-1,		1,	netgraphprotopr,
 	  NULL,		NULL,		"ctrl",	0,	0 },
 	{ N_NGSOCKLIST,	-1,		1,	netgraphprotopr,
@@ -181,7 +210,11 @@ static struct protox netgraphprotox[] = {
 };
 #endif
 
+#ifndef __rtems__
 static struct protox *protoprotox[] = {
+#else /* __rtems__ */
+static const struct protox *const protoprotox[] = {
+#endif /* __rtems__ */
 					 protox,
 #ifdef INET6
 					 ip6protox,
@@ -191,10 +224,19 @@ static struct protox *protoprotox[] = {
 #endif
 					 NULL };
 
+#ifndef __rtems__
 static void printproto(struct protox *, const char *, bool *);
+#else /* __rtems__ */
+static void printproto(const struct protox *, const char *, bool *);
+#endif /* __rtems__ */
 static void usage(void);
+#ifndef __rtems__
 static struct protox *name2protox(const char *);
 static struct protox *knownname(const char *);
+#else /* __rtems__ */
+static const struct protox *name2protox(const char *);
+static const struct protox *knownname(const char *);
+#endif /* __rtems__ */
 
 static int kresolve_list(struct nlist *_nl);
 
@@ -216,7 +258,9 @@ int	numeric_addr;	/* show addresses numerically */
 int	numeric_port;	/* show ports numerically */
 int	Pflag;		/* show TCP log ID */
 static int pflag;	/* show given protocol */
+#ifndef __rtems__
 static int	Qflag;		/* show netisr information */
+#endif /* __rtems__ */
 int	rflag;		/* show routing tables (or routing stats) */
 int	Rflag;		/* show flow / RSS statistics */
 int	sflag;		/* show protocol statistics */
@@ -233,14 +277,50 @@ int	unit;		/* unit number for above */
 static int	af;		/* address family */
 int	live;		/* true if we are examining a live system */
 
+#ifdef __rtems__
+static int main(int argc, char *argv[]);
+
+RTEMS_LINKER_RWSET(bsd_prog_netstat, char);
+
+int
+rtems_bsd_command_netstat(int argc, char *argv[])
+{
+	int exit_code;
+	void *data_begin;
+	size_t data_size;
+
+	data_begin = RTEMS_LINKER_SET_BEGIN(bsd_prog_netstat);
+	data_size = RTEMS_LINKER_SET_SIZE(bsd_prog_netstat);
+
+	rtems_bsd_program_lock();
+	exit_code = rtems_bsd_program_call_main_with_data_restore("netstat",
+	    main, argc, argv, data_begin, data_size);
+	rtems_bsd_program_unlock();
+
+	return exit_code;
+}
+#endif /* __rtems__ */
 int
 main(int argc, char *argv[])
 {
+#ifndef __rtems__
 	struct protox *tp = NULL;  /* for printing cblocks & stats */
+#else /* __rtems__ */
+	const struct protox *tp = NULL;  /* for printing cblocks & stats */
+#endif /* __rtems__ */
 	int ch;
 	int fib = -1;
 	char *endptr;
 	bool first = true;
+#ifdef __rtems__
+	struct getopt_data getopt_data;
+	memset(&getopt_data, 0, sizeof(getopt_data));
+#define optind getopt_data.optind
+#define optarg getopt_data.optarg
+#define opterr getopt_data.opterr
+#define optopt getopt_data.optopt
+#define getopt(argc, argv, opt) getopt_r(argc, argv, "+" opt, &getopt_data)
+#endif /* __rtems__ */
 
 	af = AF_UNSPEC;
 
@@ -322,7 +402,12 @@ main(int argc, char *argv[])
 			char *cp;
 
 			iflag = 1;
+#ifndef __rtems__
 			for (cp = interface = optarg; isalpha(*cp); cp++)
+#else /* __rtems__ */
+			for (cp = interface = optarg; isalpha(
+			    (unsigned char) *cp); cp++)
+#endif /* __rtems__ */
 				continue;
 			unit = atoi(cp);
 			break;
@@ -355,9 +440,11 @@ main(int argc, char *argv[])
 			}
 			pflag = 1;
 			break;
+#ifndef __rtems__
 		case 'Q':
 			Qflag = 1;
 			break;
+#endif /* __rtems__ */
 		case 'q':
 			noutputs = atoi(optarg);
 			if (noutputs != 0)
@@ -405,7 +492,11 @@ main(int argc, char *argv[])
 #define	BACKWARD_COMPATIBILITY
 #ifdef	BACKWARD_COMPATIBILITY
 	if (*argv) {
+#ifndef __rtems__
 		if (isdigit(**argv)) {
+#else /* __rtems__ */
+		if (isdigit((unsigned char) **argv)) {
+#endif /* __rtems__ */
 			interval = atoi(*argv);
 			if (interval <= 0)
 				usage();
@@ -451,6 +542,7 @@ main(int argc, char *argv[])
 		xo_finish();
 		exit(0);
 	}
+#ifndef __rtems__
 	if (Qflag) {
 		if (!live) {
 			if (kread(0, NULL, 0) == 0)
@@ -460,6 +552,7 @@ main(int argc, char *argv[])
 		xo_finish();
 		exit(0);
 	}
+#endif /* __rtems__ */
 #if 0
 	/*
 	 * Keep file descriptors open to avoid overhead
@@ -546,10 +639,12 @@ main(int argc, char *argv[])
 		for (tp = netgraphprotox; tp->pr_name; tp++)
 			printproto(tp, tp->pr_name, &first);
 #endif /* NETGRAPH */
+#ifndef __rtems__
 	if ((af == AF_UNIX || af == AF_UNSPEC) && !sflag)
 		unixpr(nl[N_UNP_COUNT].n_value, nl[N_UNP_GENCNT].n_value,
 		    nl[N_UNP_DHEAD].n_value, nl[N_UNP_SHEAD].n_value,
 		    nl[N_UNP_SPHEAD].n_value, &first);
+#endif /* __rtems__ */
 
 	if (!first)
 		xo_close_list("socket");
@@ -604,7 +699,11 @@ fetch_stats_ro(const char *sysctlname, u_long off, void *stats,
  * is not in the namelist, ignore this one.
  */
 static void
+#ifndef __rtems__
 printproto(struct protox *tp, const char *name, bool *first)
+#else /* __rtems__ */
+printproto(const struct protox *tp, const char *name, bool *first)
+#endif /* __rtems__ */
 {
 	void (*pr)(u_long, const char *, int, int);
 	u_long off;
@@ -709,6 +808,7 @@ kresolve_list(struct nlist *_nl)
 	return (0);
 }
 
+#ifndef __rtems__
 /*
  * Wrapper of kvm_dpcpu_setcpu().
  */
@@ -724,6 +824,7 @@ kset_dpcpu(u_int cpuid)
 		    cpuid, kvm_geterr(kvmd)); 
 	return;
 }
+#endif /* __rtems__ */
 
 /*
  * Read kernel memory, return 0 on success.
@@ -744,6 +845,7 @@ kread(u_long addr, void *buf, size_t size)
 	return (0);
 }
 
+#ifndef __rtems__
 /*
  * Read single counter(9).
  */
@@ -756,6 +858,7 @@ kread_counter(u_long addr)
 
 	return (kvm_counter_u64_fetch(kvmd, addr));
 }
+#endif /* __rtems__ */
 
 /*
  * Read an array of N counters in kernel memory into array of N uint64_t's.
@@ -763,6 +866,7 @@ kread_counter(u_long addr)
 int
 kread_counters(u_long addr, void *buf, size_t size)
 {
+#ifndef __rtems__
 	uint64_t *c;
 	u_long *counters;
 	size_t i, n;
@@ -789,6 +893,9 @@ kread_counters(u_long addr, void *buf, size_t size)
 
 	free(counters);
 	return (0);
+#else /* __rtems__ */
+	return (-1);
+#endif /* __rtems__ */
 }
 
 const char *
@@ -812,10 +919,18 @@ pluralies(uintmax_t n)
 /*
  * Find the protox for the given "well-known" name.
  */
+#ifndef __rtems__
 static struct protox *
+#else /* __rtems__ */
+static const struct protox *
+#endif /* __rtems__ */
 knownname(const char *name)
 {
+#ifndef __rtems__
 	struct protox **tpp, *tp;
+#else /* __rtems__ */
+	const struct protox *const *tpp, *tp;
+#endif /* __rtems__ */
 
 	for (tpp = protoprotox; *tpp; tpp++)
 		for (tp = *tpp; tp->pr_name; tp++)
@@ -827,10 +942,18 @@ knownname(const char *name)
 /*
  * Find the protox corresponding to name.
  */
+#ifndef __rtems__
 static struct protox *
+#else /* __rtems__ */
+static const struct protox *
+#endif /* __rtems__ */
 name2protox(const char *name)
 {
+#ifndef __rtems__
 	struct protox *tp;
+#else /* __rtems__ */
+	const struct protox *tp;
+#endif /* __rtems__ */
 	char **alias;			/* alias from p->aliases */
 	struct protoent *p;
 

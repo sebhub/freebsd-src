@@ -38,7 +38,9 @@
  */
 struct sx {
 	struct lock_object	lock_object;
+#ifndef __rtems__
 	volatile uintptr_t	sx_lock;
+#endif /* __rtems__ */
 };
 
 #endif	/* !_SYS__SX_H_ */

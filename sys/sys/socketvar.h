@@ -379,9 +379,14 @@ struct uio;
 /*
  * From uipc_socket and friends
  */
+#ifndef __rtems__
 int	getsockaddr(struct sockaddr **namp, caddr_t uaddr, size_t len);
 int	getsock_cap(struct thread *td, int fd, cap_rights_t *rightsp,
 	    struct file **fpp, u_int *fflagp, struct filecaps *havecaps);
+#else /* __rtems__ */
+int	getsockaddr(struct sockaddr **namp, const struct sockaddr *uaddr,
+	    size_t len);
+#endif /* __rtems__ */
 void	soabort(struct socket *so);
 int	soaccept(struct socket *so, struct sockaddr **nam);
 void	soaio_enqueue(struct task *task);
@@ -442,7 +447,11 @@ void	soupcall_clear(struct socket *, int);
 void	soupcall_set(struct socket *, int, so_upcall_t, void *);
 void	solisten_upcall_set(struct socket *, so_upcall_t, void *);
 void	sowakeup(struct socket *so, struct sockbuf *sb);
+#ifndef __rtems__
 void	sowakeup_aio(struct socket *so, struct sockbuf *sb);
+#else /* __rtems__ */
+#define	sowakeup_aio(so, sb) (void)0
+#endif /* __rtems__ */
 void	solisten_wakeup(struct socket *);
 int	selsocket(struct socket *so, int events, struct timeval *tv,
 	    struct thread *td);

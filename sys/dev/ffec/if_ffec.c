@@ -2,6 +2,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
  *
  * Copyright (c) 2013 Ian Lepore <ian@freebsd.org>
+ * Copyright (C) 2007-2008 Semihalf, Rafal Jaworowski
+ * Copyright (C) 2006-2007 Semihalf, Piotr Kruszynski
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -79,6 +81,8 @@ __FBSDID("$FreeBSD$");
 #include <net/if_types.h>
 #include <net/if_var.h>
 #include <net/if_vlan_var.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
 
 #include <dev/fdt/fdt_common.h>
 #include <dev/ffec/if_ffecreg.h>
@@ -131,16 +135,29 @@ static struct ofw_compat_data compat_data[] = {
 };
 
 /*
- * Driver data and defines.
+ * Driver data and defines.  The descriptor counts must be a power of two.
  */
+#ifndef __rtems__
+#define	RX_DESC_COUNT	512
+#else /* __rtems__ */
 #define	RX_DESC_COUNT	64
+#endif /* __rtems__ */
 #define	RX_DESC_SIZE	(sizeof(struct ffec_hwdesc) * RX_DESC_COUNT)
+#ifndef __rtems__
+#define	TX_DESC_COUNT	512
+#else /* __rtems__ */
 #define	TX_DESC_COUNT	64
+#endif /* __rtems__ */
 #define	TX_DESC_SIZE	(sizeof(struct ffec_hwdesc) * TX_DESC_COUNT)
+#define	TX_MAX_DMA_SEGS	8
 
 #define	WATCHDOG_TIMEOUT_SECS	5
 
 #define	MAX_IRQ_COUNT 3
+
+/* Interrupt Coalescing types */
+#define	FEC_IC_RX		0
+#define	FEC_IC_TX		1
 
 struct ffec_bufmap {
 	struct mbuf	*mbuf;
@@ -184,7 +201,17 @@ struct ffec_softc {
 	struct ffec_bufmap	txbuf_map[TX_DESC_COUNT];
 	uint32_t		tx_idx_head;
 	uint32_t		tx_idx_tail;
-	int			txcount;
+
+	/* interrupt coalescing */
+	int		rx_ic_time;	/* RW, valid values 0..65535 */
+	int		rx_ic_count;	/* RW, valid values 0..255 */
+	int		tx_ic_time;
+	int		tx_ic_count;
+#ifdef __rtems__
+
+	device_t		mdio_device;
+	struct mtx		mdio_mtx;
+#endif /* __rtems__ */
 };
 
 static struct resource_spec irq_res_spec[MAX_IRQ_COUNT + 1] = {
@@ -204,8 +231,17 @@ static struct resource_spec irq_res_spec[MAX_IRQ_COUNT + 1] = {
 
 static void ffec_init_locked(struct ffec_softc *sc);
 static void ffec_stop_locked(struct ffec_softc *sc);
+static void ffec_encap(struct ifnet *ifp, struct ffec_softc *sc,
+    struct mbuf *m0, int *start_tx);
 static void ffec_txstart_locked(struct ffec_softc *sc);
 static void ffec_txfinish_locked(struct ffec_softc *sc);
+static void ffec_add_sysctls(struct ffec_softc *sc);
+static int ffec_sysctl_ic_time(SYSCTL_HANDLER_ARGS);
+static int ffec_sysctl_ic_count(SYSCTL_HANDLER_ARGS);
+static void ffec_set_ic(struct ffec_softc *sc, bus_size_t off, int count,
+    int time);
+static void ffec_set_rxic(struct ffec_softc *sc);
+static void ffec_set_txic(struct ffec_softc *sc);
 
 static inline uint16_t
 RD2(struct ffec_softc *sc, bus_size_t off)
@@ -236,17 +272,39 @@ WR4(struct ffec_softc *sc, bus_size_t off, uint32_t val)
 }
 
 static inline uint32_t
-next_rxidx(struct ffec_softc *sc, uint32_t curidx)
+next_rxidx(uint32_t curidx)
 {
 
-	return ((curidx == RX_DESC_COUNT - 1) ? 0 : curidx + 1);
+	return ((curidx + 1) & (RX_DESC_COUNT - 1));
 }
 
 static inline uint32_t
-next_txidx(struct ffec_softc *sc, uint32_t curidx)
+next_txidx(uint32_t curidx)
 {
 
-	return ((curidx == TX_DESC_COUNT - 1) ? 0 : curidx + 1);
+	return ((curidx + 1) & (TX_DESC_COUNT - 1));
+}
+
+static inline uint32_t
+prev_txidx(uint32_t curidx)
+{
+
+	return ((curidx - 1) & (TX_DESC_COUNT - 1));
+}
+
+static inline uint32_t
+inc_txidx(uint32_t curidx, uint32_t inc)
+{
+
+	return ((curidx + inc) & (TX_DESC_COUNT - 1));
+}
+
+static inline uint32_t
+free_txdesc(struct ffec_softc *sc)
+{
+
+	return (((sc)->tx_idx_tail - (sc)->tx_idx_head - 1) &
+	    (TX_DESC_COUNT - 1));
 }
 
 static void
@@ -321,6 +379,13 @@ ffec_miibus_readreg(device_t dev, int phy, int reg)
 	int val;
 
 	sc = device_get_softc(dev);
+#ifdef __rtems__
+	if (sc->mdio_device) {
+		return (MIIBUS_READREG(sc->mdio_device, phy, reg));
+	}
+
+	mtx_lock(&sc->mdio_mtx);
+#endif /* __rtems__ */
 
 	WR4(sc, FEC_IER_REG, FEC_IER_MII);
 
@@ -331,11 +396,17 @@ ffec_miibus_readreg(device_t dev, int phy, int reg)
 
 	if (!ffec_miibus_iowait(sc)) {
 		device_printf(dev, "timeout waiting for mii read\n");
+#ifdef __rtems__
+		mtx_unlock(&sc->mdio_mtx);
+#endif /* __rtems__ */
 		return (-1); /* All-ones is a symptom of bad mdio. */
 	}
 
 	val = RD4(sc, FEC_MMFR_REG) & FEC_MMFR_DATA_MASK;
 
+#ifdef __rtems__
+	mtx_unlock(&sc->mdio_mtx);
+#endif /* __rtems__ */
 	return (val);
 }
 
@@ -345,6 +416,13 @@ ffec_miibus_writereg(device_t dev, int phy, int reg, int val)
 	struct ffec_softc *sc;
 
 	sc = device_get_softc(dev);
+#ifdef __rtems__
+	if (sc->mdio_device) {
+		return (MIIBUS_WRITEREG(sc->mdio_device, phy, reg, val));
+	}
+
+	mtx_lock(&sc->mdio_mtx);
+#endif /* __rtems__ */
 
 	WR4(sc, FEC_IER_REG, FEC_IER_MII);
 
@@ -356,9 +434,15 @@ ffec_miibus_writereg(device_t dev, int phy, int reg, int val)
 
 	if (!ffec_miibus_iowait(sc)) {
 		device_printf(dev, "timeout waiting for mii write\n");
+#ifdef __rtems__
+		mtx_unlock(&sc->mdio_mtx);
+#endif /* __rtems__ */
 		return (-1);
 	}
 
+#ifdef __rtems__
+	mtx_unlock(&sc->mdio_mtx);
+#endif /* __rtems__ */
 	return (0);
 }
 
@@ -588,100 +672,143 @@ ffec_tick(void *arg)
 	callout_reset(&sc->ffec_callout, hz, ffec_tick, sc);
 }
 
-inline static uint32_t
-ffec_setup_txdesc(struct ffec_softc *sc, int idx, bus_addr_t paddr, 
-    uint32_t len)
+static void
+ffec_encap(struct ifnet *ifp, struct ffec_softc *sc, struct mbuf *m0,
+    int *start_tx)
 {
-	uint32_t nidx;
+	bus_dma_segment_t segs[TX_MAX_DMA_SEGS];
+	int error, i, nsegs;
+	struct ffec_bufmap *bmap;
+	uint32_t tx_idx;
+	int csum_flags;
 	uint32_t flags;
+	uint32_t flags2;
 
-	nidx = next_txidx(sc, idx);
+	FFEC_ASSERT_LOCKED(sc);
 
-	/* Addr/len 0 means we're clearing the descriptor after xmit done. */
-	if (paddr == 0 || len == 0) {
-		flags = 0;
-		--sc->txcount;
-	} else {
-		flags = FEC_TXDESC_READY | FEC_TXDESC_L | FEC_TXDESC_TC;
-		++sc->txcount;
+	tx_idx = sc->tx_idx_head;
+	bmap = &sc->txbuf_map[tx_idx];
+
+	/* Create mapping in DMA memory */
+	error = bus_dmamap_load_mbuf_sg(sc->txbuf_tag, bmap->map, m0,
+	    segs, &nsegs, BUS_DMA_NOWAIT);
+	if (error == EFBIG) {
+		/* Too many segments!  Defrag and try again. */
+		struct mbuf *m = m_defrag(m0, M_NOWAIT);
+
+		if (m == NULL) {
+			m_freem(m0);
+			return;
+		}
+		m0 = m;
+		error = bus_dmamap_load_mbuf_sg(sc->txbuf_tag,
+		    bmap->map, m0, segs, &nsegs, BUS_DMA_NOWAIT);
 	}
-	if (nidx == 0)
-		flags |= FEC_TXDESC_WRAP;
+	if (error != 0) {
+		/* Give up. */
+		m_freem(m0);
+		return;
+	}
+
+#ifndef __rtems__
+	bus_dmamap_sync(sc->txbuf_tag, bmap->map, BUS_DMASYNC_PREWRITE);
+#endif /* __rtems__ */
+	bmap->mbuf = m0;
+
+	flags2 = FEC_TXDESC_INT;
+	csum_flags = m0->m_pkthdr.csum_flags;
+
+	if ((csum_flags & CSUM_IP) != 0) {
+		struct mbuf *n;
+		int off;
+		int off2;
+		struct ip *ip;
+
+		flags2 |= FEC_TXDESC_IINS;
+		n = m_getptr(m0, sizeof(struct ether_header), &off);
+		ip = (struct ip *)mtodo(n, off);
+		ip->ip_sum = 0;
+
+		off2 = m0->m_pkthdr.csum_data;
+		if ((csum_flags & (CSUM_TCP | CSUM_UDP)) != 0 && off2 != 0) {
+			flags2 |= FEC_TXDESC_PINS;
+			*(uint16_t *)((caddr_t)(ip + 1) + off2) = 0;
+		}
+	}
 
 	/*
-	 * The hardware requires 32-bit physical addresses.  We set up the dma
-	 * tag to indicate that, so the cast to uint32_t should never lose
-	 * significant bits.
+	 * Fill in the TX descriptors back to front so that READY bit in first
+	 * descriptor is set last.
 	 */
-	sc->txdesc_ring[idx].buf_paddr = (uint32_t)paddr;
-	sc->txdesc_ring[idx].flags_len = flags | len; /* Must be set last! */
+	tx_idx = inc_txidx(tx_idx, (uint32_t)nsegs);
+	sc->tx_idx_head = tx_idx;
+	flags = FEC_TXDESC_L | FEC_TXDESC_READY | FEC_TXDESC_TC;
+	for (i = nsegs - 1; i >= 0; i--) {
+		struct ffec_hwdesc *tx_desc;
 
-	return (nidx);
-}
+		tx_idx = prev_txidx(tx_idx);;
+		tx_desc = &sc->txdesc_ring[tx_idx];
+		tx_desc->buf_paddr = segs[i].ds_addr;
+		tx_desc->flags2 = flags2;
+#ifdef __rtems__
+		uintptr_t first_flush = (uintptr_t)segs[i].ds_addr;
+		size_t len_flush = segs[i].ds_len;
+#ifdef CPU_CACHE_LINE_BYTES
+		uintptr_t last_flush = first_flush + len_flush;
+		/* mbufs should be cache line aligned. So we can just round. */
+		first_flush = rounddown2(first_flush, CPU_CACHE_LINE_BYTES);
+		last_flush = roundup2(last_flush, CPU_CACHE_LINE_BYTES);
+		len_flush = last_flush - first_flush;
+#endif
+		rtems_cache_flush_multiple_data_lines((void*)first_flush,
+		    len_flush);
+#endif /* __rtems__ */
 
-static int
-ffec_setup_txbuf(struct ffec_softc *sc, int idx, struct mbuf **mp)
-{
-	struct mbuf * m;
-	int error, nsegs;
-	struct bus_dma_segment seg;
+		if (i == 0) {
+			wmb();
+		}
 
-	if ((m = m_defrag(*mp, M_NOWAIT)) == NULL)
-		return (ENOMEM);
-	*mp = m;
+		tx_desc->flags_len = (tx_idx == (TX_DESC_COUNT - 1) ?
+		    FEC_TXDESC_WRAP : 0) | flags | segs[i].ds_len;
 
-	error = bus_dmamap_load_mbuf_sg(sc->txbuf_tag, sc->txbuf_map[idx].map,
-	    m, &seg, &nsegs, 0);
-	if (error != 0) {
-		return (ENOMEM);
+		flags &= ~FEC_TXDESC_L;
 	}
-	bus_dmamap_sync(sc->txbuf_tag, sc->txbuf_map[idx].map, 
-	    BUS_DMASYNC_PREWRITE);
 
-	sc->txbuf_map[idx].mbuf = m;
-	ffec_setup_txdesc(sc, idx, seg.ds_addr, seg.ds_len);
-
-	return (0);
-
+	BPF_MTAP(ifp, m0);
+	*start_tx = 1;
 }
 
 static void
 ffec_txstart_locked(struct ffec_softc *sc)
 {
 	struct ifnet *ifp;
-	struct mbuf *m;
-	int enqueued;
+	struct mbuf *m0;
+	int start_tx;
 
 	FFEC_ASSERT_LOCKED(sc);
+
+	ifp = sc->ifp;
+	start_tx = 0;
 
 	if (!sc->link_is_up)
 		return;
 
-	ifp = sc->ifp;
-
-	if (ifp->if_drv_flags & IFF_DRV_OACTIVE)
-		return;
-
-	enqueued = 0;
-
 	for (;;) {
-		if (sc->txcount == (TX_DESC_COUNT-1)) {
+		if (free_txdesc(sc) < TX_MAX_DMA_SEGS) {
+			/* No free descriptors */
 			ifp->if_drv_flags |= IFF_DRV_OACTIVE;
 			break;
 		}
-		IFQ_DRV_DEQUEUE(&ifp->if_snd, m);
-		if (m == NULL)
+
+		/* Get packet from the queue */
+		IFQ_DRV_DEQUEUE(&ifp->if_snd, m0);
+		if (m0 == NULL)
 			break;
-		if (ffec_setup_txbuf(sc, sc->tx_idx_head, &m) != 0) {
-			IFQ_DRV_PREPEND(&ifp->if_snd, m);
-			break;
-		}
-		BPF_MTAP(ifp, m);
-		sc->tx_idx_head = next_txidx(sc, sc->tx_idx_head);
-		++enqueued;
+
+		ffec_encap(ifp, sc, m0, &start_tx);
 	}
 
-	if (enqueued != 0) {
+	if (start_tx ) {
 		bus_dmamap_sync(sc->txdesc_tag, sc->txdesc_map, BUS_DMASYNC_PREWRITE);
 		WR4(sc, FEC_TDAR_REG, FEC_TDAR_TDAR);
 		bus_dmamap_sync(sc->txdesc_tag, sc->txdesc_map, BUS_DMASYNC_POSTWRITE);
@@ -703,40 +830,43 @@ static void
 ffec_txfinish_locked(struct ffec_softc *sc)
 {
 	struct ifnet *ifp;
-	struct ffec_hwdesc *desc;
-	struct ffec_bufmap *bmap;
-	boolean_t retired_buffer;
+	uint32_t tx_idx;
 
 	FFEC_ASSERT_LOCKED(sc);
+
+	ifp = sc->ifp;
 
 	/* XXX Can't set PRE|POST right now, but we need both. */
 	bus_dmamap_sync(sc->txdesc_tag, sc->txdesc_map, BUS_DMASYNC_PREREAD);
 	bus_dmamap_sync(sc->txdesc_tag, sc->txdesc_map, BUS_DMASYNC_POSTREAD);
-	ifp = sc->ifp;
-	retired_buffer = false;
-	while (sc->tx_idx_tail != sc->tx_idx_head) {
-		desc = &sc->txdesc_ring[sc->tx_idx_tail];
+
+	tx_idx = sc->tx_idx_tail;
+	while (tx_idx != sc->tx_idx_head) {
+		struct ffec_hwdesc *desc;
+		struct ffec_bufmap *bmap;
+
+		desc = &sc->txdesc_ring[tx_idx];
 		if (desc->flags_len & FEC_TXDESC_READY)
 			break;
-		retired_buffer = true;
-		bmap = &sc->txbuf_map[sc->tx_idx_tail];
-		bus_dmamap_sync(sc->txbuf_tag, bmap->map, 
+
+		bmap = &sc->txbuf_map[tx_idx];
+		tx_idx = next_txidx(tx_idx);
+		if (bmap->mbuf == NULL)
+			continue;
+
+		/*
+		 * This is the last buf in this packet, so unmap and free it.
+		 */
+		bus_dmamap_sync(sc->txbuf_tag, bmap->map,
 		    BUS_DMASYNC_POSTWRITE);
 		bus_dmamap_unload(sc->txbuf_tag, bmap->map);
 		m_freem(bmap->mbuf);
 		bmap->mbuf = NULL;
-		ffec_setup_txdesc(sc, sc->tx_idx_tail, 0, 0);
-		sc->tx_idx_tail = next_txidx(sc, sc->tx_idx_tail);
 	}
+	sc->tx_idx_tail = tx_idx;
 
-	/*
-	 * If we retired any buffers, there will be open tx slots available in
-	 * the descriptor ring, go try to start some new output.
-	 */
-	if (retired_buffer) {
-		ifp->if_drv_flags &= ~IFF_DRV_OACTIVE;
-		ffec_txstart_locked(sc);
-	}
+	ifp->if_drv_flags &= ~IFF_DRV_OACTIVE;
+	ffec_txstart_locked(sc);
 
 	/* If there are no buffers outstanding, muzzle the watchdog. */
 	if (sc->tx_idx_tail == sc->tx_idx_head) {
@@ -754,8 +884,10 @@ ffec_setup_rxdesc(struct ffec_softc *sc, int idx, bus_addr_t paddr)
 	 * tag to indicate that, so the cast to uint32_t should never lose
 	 * significant bits.
 	 */
-	nidx = next_rxidx(sc, idx);
+	nidx = next_rxidx(idx);
 	sc->rxdesc_ring[idx].buf_paddr = (uint32_t)paddr;
+	sc->rxdesc_ring[idx].flags2 = FEC_RXDESC_INT;
+	wmb();
 	sc->rxdesc_ring[idx].flags_len = FEC_RXDESC_EMPTY | 
 		((nidx == 0) ? FEC_RXDESC_WRAP : 0);
 
@@ -802,17 +934,23 @@ ffec_alloc_mbufcl(struct ffec_softc *sc)
 
 	m = m_getcl(M_NOWAIT, MT_DATA, M_PKTHDR);
 	if (m != NULL)
+#ifdef __rtems__
+	{
+#endif /* __rtems__ */
 		m->m_pkthdr.len = m->m_len = m->m_ext.ext_size;
+#ifdef __rtems__
+		rtems_cache_invalidate_multiple_data_lines(m->m_data, m->m_len);
+	}
+#endif /* __rtems__ */
 
 	return (m);
 }
 
 static void
-ffec_rxfinish_onebuf(struct ffec_softc *sc, int len)
+ffec_rxfinish_onebuf(struct ffec_softc *sc, int len, uint32_t flags2)
 {
 	struct mbuf *m, *newmbuf;
 	struct ffec_bufmap *bmap;
-	uint8_t *dst, *src;
 	int error;
 
 	/*
@@ -839,6 +977,12 @@ ffec_rxfinish_onebuf(struct ffec_softc *sc, int len)
 	m->m_pkthdr.len = len;
 	m->m_pkthdr.rcvif = sc->ifp;
 
+	if ((flags2 & (FEC_RXDESC_ICE | FEC_RXDESC_PCR)) == 0) {
+		m->m_pkthdr.csum_flags |= CSUM_IP_CHECKED | CSUM_IP_VALID |
+		    CSUM_DATA_VALID | CSUM_PSEUDO_HDR;
+		m->m_pkthdr.csum_data = 0xffff;
+	}
+
 	/*
 	 * Align the protocol headers in the receive buffer on a 32-bit
 	 * boundary.  Newer hardware does the alignment for us.  On hardware
@@ -852,6 +996,8 @@ ffec_rxfinish_onebuf(struct ffec_softc *sc, int len)
 	if (sc->fecflags & FECFLAG_RACC) {
 		m->m_data = mtod(m, uint8_t *) + 2;
 	} else {
+		uint8_t *dst, *src;
+
 		src = mtod(m, uint8_t*);
 		dst = src - ETHER_ALIGN;
 		bcopy(src, dst, len);
@@ -921,9 +1067,9 @@ ffec_rxfinish_locked(struct ffec_softc *sc)
 			/*
 			 *  Normal case: a good frame all in one buffer.
 			 */
-			ffec_rxfinish_onebuf(sc, len);
+			ffec_rxfinish_onebuf(sc, len, desc->flags2);
 		}
-		sc->rx_idx = next_rxidx(sc, sc->rx_idx);
+		sc->rx_idx = next_rxidx(sc->rx_idx);
 	}
 
 	if (produced_empty_buffer) {
@@ -1074,13 +1220,15 @@ ffec_stop_locked(struct ffec_softc *sc)
 	while (idx != sc->tx_idx_head) {
 		desc = &sc->txdesc_ring[idx];
 		bmap = &sc->txbuf_map[idx];
-		if (desc->buf_paddr != 0) {
-			bus_dmamap_unload(sc->txbuf_tag, bmap->map);
-			m_freem(bmap->mbuf);
-			bmap->mbuf = NULL;
-			ffec_setup_txdesc(sc, idx, 0, 0);
-		}
-		idx = next_txidx(sc, idx);
+		idx = next_txidx(idx);
+		if (bmap->mbuf == NULL)
+			continue;
+
+		bus_dmamap_sync(sc->txbuf_tag, bmap->map,
+		    BUS_DMASYNC_POSTWRITE);
+		bus_dmamap_unload(sc->txbuf_tag, bmap->map);
+		m_freem(bmap->mbuf);
+		bmap->mbuf = NULL;
 	}
 
 	/*
@@ -1208,7 +1356,6 @@ ffec_init_locked(struct ffec_softc *sc)
 	 */
 	sc->rx_idx = 0;
 	sc->tx_idx_head = sc->tx_idx_tail = 0;
-	sc->txcount = 0;
 	WR4(sc, FEC_RDSR_REG, sc->rxdesc_ring_paddr);
 	WR4(sc, FEC_TDSR_REG, sc->txdesc_ring_paddr);
 
@@ -1252,6 +1399,7 @@ ffec_init_locked(struct ffec_softc *sc)
 	regval |= FEC_ECR_DBSWP;
 #endif
 	regval |= FEC_ECR_ETHEREN;
+	regval |= FEC_ECR_EN1588;
 	WR4(sc, FEC_ECR_REG, regval);
 
 	ifp->if_drv_flags |= IFF_DRV_RUNNING;
@@ -1268,6 +1416,9 @@ ffec_init_locked(struct ffec_softc *sc)
 	 * available in ffec_attach() or ffec_stop().
 	 */
 	WR4(sc, FEC_RDAR_REG, FEC_RDAR_RDAR);
+
+	ffec_set_rxic(sc);
+	ffec_set_txic(sc);
 }
 
 static void
@@ -1455,10 +1606,232 @@ ffec_detach(device_t dev)
 	if (sc->mem_res != NULL)
 		bus_release_resource(dev, SYS_RES_MEMORY, 0, sc->mem_res);
 
+#ifdef __rtems__
+	mtx_destroy(&sc->mtx);
+#endif /* __rtems__ */
 	FFEC_LOCK_DESTROY(sc);
 	return (0);
 }
 
+static void
+ffec_add_sysctls(struct ffec_softc *sc)
+{
+	struct sysctl_ctx_list *ctx;
+	struct sysctl_oid_list *children;
+	struct sysctl_oid *tree;
+
+	ctx = device_get_sysctl_ctx(sc->dev);
+	children = SYSCTL_CHILDREN(device_get_sysctl_tree(sc->dev));
+	tree = SYSCTL_ADD_NODE(ctx, children, OID_AUTO, "int_coal",
+	    CTLFLAG_RD, 0, "FEC Interrupts coalescing");
+	children = SYSCTL_CHILDREN(tree);
+
+	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "rx_time",
+	    CTLTYPE_UINT | CTLFLAG_RW, sc, FEC_IC_RX, ffec_sysctl_ic_time,
+	    "I", "IC RX time threshold (0-65535)");
+	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "rx_count",
+	    CTLTYPE_UINT | CTLFLAG_RW, sc, FEC_IC_RX, ffec_sysctl_ic_count,
+	    "I", "IC RX frame count threshold (0-255)");
+
+	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "tx_time",
+	    CTLTYPE_UINT | CTLFLAG_RW, sc, FEC_IC_TX, ffec_sysctl_ic_time,
+	    "I", "IC TX time threshold (0-65535)");
+	SYSCTL_ADD_PROC(ctx, children, OID_AUTO, "tx_count",
+	    CTLTYPE_UINT | CTLFLAG_RW, sc, FEC_IC_TX, ffec_sysctl_ic_count,
+	    "I", "IC TX frame count threshold (0-255)");
+}
+
+/*
+ * With Interrupt Coalescing (IC) active, a transmit/receive frame
+ * interrupt is raised either upon:
+ *
+ * - threshold-defined period of time elapsed, or
+ * - threshold-defined number of frames is received/transmitted,
+ *   whichever occurs first.
+ *
+ * The following sysctls regulate IC behaviour (for TX/RX separately):
+ *
+ * dev.ffec.<unit>.int_coal.rx_time
+ * dev.ffec.<unit>.int_coal.rx_count
+ * dev.ffec.<unit>.int_coal.tx_time
+ * dev.ffec.<unit>.int_coal.tx_count
+ *
+ * Values:
+ *
+ * - 0 for either time or count disables IC on the given TX/RX path
+ *
+ * - count: 1-255 (expresses frame count number; note that value of 1 is
+ *   effectively IC off)
+ *
+ * - time: 1-65535 (value corresponds to a real time period and is
+ *   expressed in units equivalent to 64 FEC interface clocks, i.e. one timer
+ *   threshold unit is 26.5 us, 2.56 us, or 512 ns, corresponding to 10 Mbps,
+ *   100 Mbps, or 1Gbps, respectively. For detailed discussion consult the
+ *   FEC reference manual.
+ */
+static int
+ffec_sysctl_ic_time(SYSCTL_HANDLER_ARGS)
+{
+	int error;
+	uint32_t time;
+	struct ffec_softc *sc = (struct ffec_softc *)arg1;
+
+	time = (arg2 == FEC_IC_RX) ? sc->rx_ic_time : sc->tx_ic_time;
+
+	error = sysctl_handle_int(oidp, &time, 0, req);
+	if (error != 0)
+		return (error);
+
+	if (time > 65535)
+		return (EINVAL);
+
+	FFEC_LOCK(sc);
+	if (arg2 == FEC_IC_RX) {
+		sc->rx_ic_time = time;
+		ffec_set_rxic(sc);
+	} else {
+		sc->tx_ic_time = time;
+		ffec_set_txic(sc);
+	}
+	FFEC_UNLOCK(sc);
+
+	return (0);
+}
+
+static int
+ffec_sysctl_ic_count(SYSCTL_HANDLER_ARGS)
+{
+	int error;
+	uint32_t count;
+	struct ffec_softc *sc = (struct ffec_softc *)arg1;
+
+	count = (arg2 == FEC_IC_RX) ? sc->rx_ic_count : sc->tx_ic_count;
+
+	error = sysctl_handle_int(oidp, &count, 0, req);
+	if (error != 0)
+		return (error);
+
+	if (count > 255)
+		return (EINVAL);
+
+	FFEC_LOCK(sc);
+	if (arg2 == FEC_IC_RX) {
+		sc->rx_ic_count = count;
+		ffec_set_rxic(sc);
+	} else {
+		sc->tx_ic_count = count;
+		ffec_set_txic(sc);
+	}
+	FFEC_UNLOCK(sc);
+
+	return (0);
+}
+
+static void
+ffec_set_ic(struct ffec_softc *sc, bus_size_t off, int count, int time)
+{
+	uint32_t ic;
+
+	if (count == 0 || time == 0)
+		/* Disable RX IC */
+		ic = 0;
+	else {
+		ic = FEC_IC_ICEN;
+		ic |= FEC_IC_ICFT(count);
+		ic |= FEC_IC_ICTT(time);
+	}
+
+	WR4(sc, off, ic);
+}
+
+static void
+ffec_set_rxic(struct ffec_softc *sc)
+{
+
+	ffec_set_ic(sc, FEC_RXIC0_REG, sc->rx_ic_count, sc->rx_ic_time);
+}
+
+static void
+ffec_set_txic(struct ffec_softc *sc)
+{
+
+	ffec_set_ic(sc, FEC_TXIC0_REG, sc->tx_ic_count, sc->tx_ic_time);
+}
+
+#ifdef __rtems__
+int
+ffec_get_phy_information(
+	struct ffec_softc *sc,
+	phandle_t node,
+	device_t dev,
+	int *phy_addr
+)
+{
+	phandle_t phy_node;
+	phandle_t parent_node;
+	pcell_t phy_handle, phy_reg;
+	device_t other;
+	phandle_t xref;
+
+	/* Search for the phy-handle and get the address */
+
+	if (OF_getencprop(node, "phy-handle", (void *)&phy_handle,
+	    sizeof(phy_handle)) <= 0)
+		return (ENXIO);
+
+	phy_node = OF_node_from_xref(phy_handle);
+
+	if (OF_getencprop(phy_node, "reg", (void *)&phy_reg,
+	    sizeof(phy_reg)) <= 0)
+		return (ENXIO);
+
+	*phy_addr = phy_reg;
+
+	/* Detect whether PHY handle is connected to this or another FFEC. */
+	parent_node = phy_node;
+
+	while (parent_node != 0) {
+		if (parent_node == node) {
+			/* PHY is directly connected. That's easy. */
+			sc->mdio_device = NULL;
+			return 0;
+		}
+
+		/*
+		 * Check whether the node is also an Ethernet controller. Do
+		 * that by just assuming that every Ethernet controller has a
+		 * PHY attached to it.
+		 */
+		if (OF_getencprop(parent_node, "phy-handle",
+		    (void *)&phy_handle, sizeof(phy_handle)) > 0) {
+			/*
+			 * Try to find the device of the other Ethernet
+			 * controller and use that for MDIO communication.
+			 * Note: This is not really a nice workaround but it
+			 * works.
+			 */
+			xref = OF_xref_from_node(parent_node);
+			if (xref == 0) {
+				device_printf(dev,
+				    "Couldn't get device that handles PHY\n");
+				return (ENXIO);
+			}
+			other = OF_device_from_xref(xref);
+			if (other == 0) {
+				device_printf(dev,
+				    "Couldn't get device that handles PHY\n");
+				return (ENXIO);
+			}
+			sc->mdio_device = other;
+			return 0;
+		}
+
+		parent_node = OF_parent(parent_node);
+	}
+	return (ENXIO);
+}
+
+#endif /* __rtems__ */
 static int
 ffec_attach(device_t dev)
 {
@@ -1476,6 +1849,10 @@ ffec_attach(device_t dev)
 	sc->dev = dev;
 
 	FFEC_LOCK_INIT(sc);
+#ifdef __rtems__
+	mtx_init(&sc->mtx, device_get_nameunit(sc->dev),
+	    MTX_NETWORK_LOCK, MTX_DEF);
+#endif /* __rtems__ */
 
 	/*
 	 * There are differences in the implementation and features of the FEC
@@ -1486,6 +1863,14 @@ ffec_attach(device_t dev)
 	sc->fecflags = (uint32_t)(typeflags & ~FECTYPE_MASK);
 
 	if (sc->fecflags & FECFLAG_AVB) {
+		sc->rxbuf_align = 64;
+		sc->txbuf_align = 1;
+	} else {
+		sc->rxbuf_align = 16;
+		sc->txbuf_align = 16;
+	}
+
+	if (sc->fectype & FECFLAG_AVB) {
 		sc->rxbuf_align = 64;
 		sc->txbuf_align = 1;
 	} else {
@@ -1506,7 +1891,11 @@ ffec_attach(device_t dev)
 	if (sc->phy_conn_type == MII_CONTYPE_UNKNOWN) {
 		device_printf(sc->dev, "No valid 'phy-mode' "
 		    "property found in FDT data for device.\n");
+#ifndef __rtems__
 		error = ENOATTR;
+#else /* __rtems__ */
+		error = ENXIO;
+#endif /* __rtems__ */
 		goto out;
 	}
 
@@ -1570,7 +1959,7 @@ ffec_attach(device_t dev)
 	    BUS_SPACE_MAXADDR_32BIT,	/* lowaddr */
 	    BUS_SPACE_MAXADDR,		/* highaddr */
 	    NULL, NULL,			/* filter, filterarg */
-	    MCLBYTES, 1, 		/* maxsize, nsegments */
+	    MCLBYTES, TX_MAX_DMA_SEGS, 	/* maxsize, nsegments */
 	    MCLBYTES,			/* maxsegsize */
 	    0,				/* flags */
 	    NULL, NULL,			/* lockfunc, lockarg */
@@ -1589,7 +1978,9 @@ ffec_attach(device_t dev)
 			    "could not create TX buffer DMA map.\n");
 			goto out;
 		}
-		ffec_setup_txdesc(sc, idx, 0, 0);
+		sc->txdesc_ring[idx].buf_paddr = 0;
+		sc->txdesc_ring[idx].flags_len =
+		    ((idx == TX_DESC_COUNT - 1) ?  FEC_TXDESC_WRAP : 0);
 	}
 
 	/*
@@ -1731,14 +2122,24 @@ ffec_attach(device_t dev)
 	}
 	WR4(sc, FEC_MSCR_REG, mscr);
 
+	/* Configure defaults for interrupts coalescing */
+	sc->rx_ic_time = 768;
+	sc->rx_ic_count = RX_DESC_COUNT / 4;
+	sc->tx_ic_time = 768;
+	sc->tx_ic_count = TX_DESC_COUNT / 4;
+
+	ffec_add_sysctls(sc);
+
 	/* Set up the ethernet interface. */
 	sc->ifp = ifp = if_alloc(IFT_ETHER);
 
 	ifp->if_softc = sc;
 	if_initname(ifp, device_get_name(dev), device_get_unit(dev));
 	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
-	ifp->if_capabilities = IFCAP_VLAN_MTU;
+	ifp->if_capabilities = IFCAP_HWCSUM | IFCAP_HWCSUM_IPV6 |
+	    IFCAP_VLAN_MTU;
 	ifp->if_capenable = ifp->if_capabilities;
+	ifp->if_hwassist = CSUM_IP | CSUM_TCP | CSUM_UDP;
 	ifp->if_start = ffec_txstart;
 	ifp->if_ioctl = ffec_ioctl;
 	ifp->if_init = ffec_init;
@@ -1756,9 +2157,17 @@ ffec_attach(device_t dev)
 	ffec_miigasket_setup(sc);
 
 	/* Attach the mii driver. */
+#ifdef __rtems__
+	OF_device_register_xref(OF_xref_from_node(ofw_node), dev);
+	if (ffec_get_phy_information(sc, ofw_node, dev, &phynum) != 0) {
+		phynum = MII_PHY_ANY;
+	}
+	(void) dummy;
+#else /* __rtems__ */
 	if (fdt_get_phyaddr(ofw_node, dev, &phynum, &dummy) != 0) {
 		phynum = MII_PHY_ANY;
 	}
+#endif /* __rtems__ */
 	error = mii_attach(dev, &sc->miibus, ifp, ffec_media_change,
 	    ffec_media_status, BMSR_DEFCAPMASK, phynum, MII_OFFSET_ANY,
 	    (sc->fecflags & FECTYPE_MVF) ? MIIF_FORCEANEG : 0);

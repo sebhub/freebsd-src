@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -34,6 +38,9 @@ static const char rcsid[] =
   "$FreeBSD$";
 #endif /* not lint */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -57,6 +64,9 @@ static const char rcsid[] =
 #include <netinet6/nd6.h>	/* Define ND6_INFINITE_LIFETIME */
 
 #include "ifconfig.h"
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-af_inet6-data.h"
+#endif /* __rtems__ */
 
 static	struct in6_ifreq in6_ridreq;
 static	struct in6_aliasreq in6_addreq =
@@ -326,12 +336,19 @@ in6_getprefix(const char *plen, int which)
 }
 
 static void
-in6_getaddr(const char *s, int which)
+in6_getaddr(const char *cs, int which)
 {
 	struct sockaddr_in6 *sin = sin6tab[which];
 	struct addrinfo hints, *res;
 	int error = -1;
+	char s[64];
+	size_t slen = strlen(cs);
 
+	if (slen < sizeof(s) - 1 ) {
+		memcpy(s, cs, slen + 1);
+	} else {
+		errx(1, "%s: address too long", cs);
+	}
 	newaddr &= 1;
 
 	sin->sin6_len = sizeof(*sin);
@@ -534,7 +551,11 @@ static struct option in6_Lopt = {
 	.cb = in6_Lopt_cb
 };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+void
+#endif /* __rtems__ */
 inet6_ctor(void)
 {
 	size_t i;

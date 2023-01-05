@@ -72,6 +72,10 @@
 #include <netinet/ip_mroute.h>
 
 #include <vm/uma.h>
+#ifdef __rtems__
+#include <machine/rtems-bsd-syscall-api.h>
+#include <sys/file.h>
+#endif /* __rtems__ */
 
 #define	RT_MAXFIBS	UINT16_MAX
 
@@ -171,7 +175,11 @@ sysctl_my_fibnum(SYSCTL_HANDLER_ARGS)
         int fibnum;
         int error;
  
+#ifndef __rtems__
         fibnum = curthread->td_proc->p_fibnum;
+#else /* __rtems__ */
+        fibnum = BSD_DEFAULT_FIB;
+#endif /* __rtems__ */
         error = sysctl_handle_int(oidp, &fibnum, 0, req);
         return (error);
 }
@@ -397,14 +405,36 @@ struct setfib_args {
 	int     fibnum;
 };
 #endif
+#ifdef __rtems__
+static
+#endif /* __rtems__ */
 int
 sys_setfib(struct thread *td, struct setfib_args *uap)
 {
 	if (uap->fibnum < 0 || uap->fibnum >= rt_numfibs)
 		return EINVAL;
+#ifndef __rtems__
 	td->td_proc->p_fibnum = uap->fibnum;
+#else /* __rtems__ */
+	if (uap->fibnum != BSD_DEFAULT_FIB)
+		return EINVAL;
+#endif /* __rtems__ */
 	return (0);
 }
+#ifdef __rtems__
+int
+setfib(int fibnum)
+{
+	struct setfib_args ua = {
+		.fibnum = fibnum
+	};
+	int error;
+
+	error = sys_setfib(NULL, &ua);
+
+	return rtems_bsd_error_to_status_and_errno(error);
+}
+#endif /* __rtems__ */
 
 /*
  * Packet routing routines.
@@ -1986,7 +2016,11 @@ rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
 	}
 	if (fibnum == RT_ALL_FIBS) {
 		if (V_rt_add_addr_allfibs == 0 && cmd == (int)RTM_ADD)
+#ifndef __rtems__
 			startfib = endfib = ifa->ifa_ifp->if_fib;
+#else /* __rtems__ */
+			startfib = endfib = BSD_DEFAULT_FIB;
+#endif /* __rtems__ */
 		else {
 			startfib = 0;
 			endfib = rt_numfibs - 1;

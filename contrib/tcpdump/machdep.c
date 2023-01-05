@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1996, 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -72,3 +76,6 @@ abort_on_misalignment(char *ebuf _U_, size_t ebufsiz _U_)
 #endif
 	return (0);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-machdep-data.h"
+#endif /* __rtems__ */

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (C) 1998 and 1999 WIDE Project.
  * All rights reserved.
@@ -830,3 +834,6 @@ dhcp6_print(netdissect_options *ndo,
 trunc:
 	ND_PRINT((ndo, "[|dhcp6]"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-dhcp6-data.h"
+#endif /* __rtems__ */

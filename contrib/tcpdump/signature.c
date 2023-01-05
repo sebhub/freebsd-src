@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that: (1) source code
@@ -212,3 +216,6 @@ signature_verify(netdissect_options *ndo _U_, const u_char *pptr _U_,
  * c-basic-offset: 4
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-signature-data.h"
+#endif /* __rtems__ */

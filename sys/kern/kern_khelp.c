@@ -313,6 +313,7 @@ khelp_new_hhook_registered(struct hhook_head *hhh, uint32_t flags)
 	KHELP_LIST_RUNLOCK();
 }
 
+#ifndef __rtems__
 int
 khelp_modevent(module_t mod, int event_type, void *data)
 {
@@ -372,3 +373,4 @@ khelp_modevent(module_t mod, int event_type, void *data)
 
 	return (error);
 }
+#endif /* __rtems__ */

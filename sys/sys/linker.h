@@ -274,6 +274,7 @@ extern int kld_debug;
 
 #endif
 
+#ifndef __rtems__
 typedef int elf_lookup_fn(linker_file_t, Elf_Size, int, Elf_Addr *);
 
 /* Support functions */
@@ -307,6 +308,7 @@ int elf_cpu_unload_file(linker_file_t);
 /* values for type */
 #define ELF_RELOC_REL	1
 #define ELF_RELOC_RELA	2
+#endif /* __rtems__ */
 
 /*
  * This is version 1 of the KLD file status structure. It is identified

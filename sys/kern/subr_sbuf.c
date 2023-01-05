@@ -586,7 +586,7 @@ sbuf_cpy(struct sbuf *s, const char *str)
 /*
  * Format the given argument list and append the resulting string to an sbuf.
  */
-#ifdef _KERNEL
+#if defined(_KERNEL) && !defined(__rtems__)
 
 /*
  * Append a non-NUL character to an sbuf.  This prototype signature is

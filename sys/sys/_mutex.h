@@ -46,7 +46,9 @@
  */
 struct mtx {
 	struct lock_object	lock_object;	/* Common lock properties. */
+#ifndef __rtems__
 	volatile uintptr_t	mtx_lock;	/* Owner and flags. */
+#endif /* __rtems__ */
 };
 
 /*
@@ -58,9 +60,13 @@ struct mtx {
  * additional padding for the struct to keep a correct alignment for
  * the mutex.
  */
+#ifndef __rtems__
 struct mtx_padalign {
 	struct lock_object	lock_object;	/* Common lock properties. */
 	volatile uintptr_t	mtx_lock;	/* Owner and flags. */
 } __aligned(CACHE_LINE_SIZE);
+#else /* __rtems__ */
+#define	mtx_padalign mtx
+#endif /* __rtems__ */
 
 #endif /* !_SYS__MUTEX_H_ */

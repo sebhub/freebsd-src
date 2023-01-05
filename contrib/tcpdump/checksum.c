@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1998-2006 The TCPDUMP project
  *
@@ -187,3 +191,6 @@ create_osi_cksum (const uint8_t *pptr, int checksum_offset, int length)
 
     return checksum;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-checksum-data.h"
+#endif /* __rtems__ */

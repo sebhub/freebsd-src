@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Marko Kiiskila carnil@cs.tut.fi
  *
@@ -106,3 +110,6 @@ cip_if_print(netdissect_options *ndo, const struct pcap_pkthdr *h, const u_char 
  * c-basic-offset: 8
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-cip-data.h"
+#endif /* __rtems__ */

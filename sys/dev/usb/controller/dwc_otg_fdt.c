@@ -59,9 +59,10 @@ __FBSDID("$FreeBSD$");
 
 static device_probe_t dwc_otg_probe;
 
-static struct ofw_compat_data compat_data[] = {
+static const struct ofw_compat_data compat_data[] = {
 	{ "synopsys,designware-hs-otg2",	1 },
 	{ "snps,dwc2",				1 },
+	{ "snps,dwc-otg",			1 },
 	{ NULL,					0 }
 };
 
@@ -123,6 +124,8 @@ dwc_otg_attach(device_t dev)
 			device_printf(dev, "Invalid FDT dr_mode: %s\n",
 			    usb_mode);
 		}
+	} else {
+		sc->sc_otg.sc_mode = DWC_MODE_HOST;
 	}
 
 	/* get all DMA memory */

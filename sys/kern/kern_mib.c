@@ -59,6 +59,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/systm.h>
 #include <sys/unistd.h>
+#ifdef __rtems__
+#include <rtems/bsd/modules.h>
+#endif /* __rtems__ */
 
 SYSCTL_ROOT_NODE(0,	  sysctl, CTLFLAG_RW, 0,
 	"Sysctl internal magic");
@@ -72,10 +75,13 @@ SYSCTL_ROOT_NODE(CTL_NET,	  net,    CTLFLAG_RW, 0,
 	"Network, (see socket.h)");
 SYSCTL_ROOT_NODE(CTL_DEBUG,  debug,  CTLFLAG_RW, 0,
 	"Debugging");
+#ifndef __rtems__
 SYSCTL_NODE(_debug, OID_AUTO,  sizeof,  CTLFLAG_RW, 0,
 	"Sizeof various things");
+#endif /* __rtems__ */
 SYSCTL_ROOT_NODE(CTL_HW,	  hw,     CTLFLAG_RW, 0,
 	"hardware");
+#ifndef __rtems__
 SYSCTL_ROOT_NODE(CTL_MACHDEP, machdep, CTLFLAG_RW, 0,
 	"machine dependent");
 SYSCTL_NODE(_machdep, OID_AUTO, mitigations, CTLFLAG_RW, 0,
@@ -87,8 +93,10 @@ SYSCTL_ROOT_NODE(CTL_P1003_1B,  p1003_1b,   CTLFLAG_RW, 0,
 
 SYSCTL_ROOT_NODE(OID_AUTO,  compat, CTLFLAG_RW, 0,
 	"Compatibility code");
+#endif /* __rtems__ */
 SYSCTL_ROOT_NODE(OID_AUTO, security, CTLFLAG_RW, 0, 
      	"Security");
+#ifndef __rtems__
 #ifdef REGRESSION
 SYSCTL_ROOT_NODE(OID_AUTO, regression, CTLFLAG_RW, 0,
      "Regression test MIB");
@@ -280,6 +288,7 @@ sysctl_hw_machine_arch(SYSCTL_HANDLER_ARGS)
 SYSCTL_PROC(_hw, HW_MACHINE_ARCH, machine_arch, CTLTYPE_STRING | CTLFLAG_RD |
     CTLFLAG_MPSAFE, NULL, 0, sysctl_hw_machine_arch, "A",
     "System architecture");
+#endif /* __rtems__ */
 
 SYSCTL_STRING(_kern, OID_AUTO, supported_archs, CTLFLAG_RD | CTLFLAG_MPSAFE,
 #ifdef COMPAT_FREEBSD32
@@ -288,6 +297,7 @@ SYSCTL_STRING(_kern, OID_AUTO, supported_archs, CTLFLAG_RD | CTLFLAG_MPSAFE,
     MACHINE_ARCH, 0, "Supported architectures for binaries");
 #endif
 
+#if defined(RTEMS_BSD_MODULE_NETINET) || defined(RTEMS_BSD_MODULE_NETINET6)
 static int
 sysctl_hostname(SYSCTL_HANDLER_ARGS)
 {
@@ -305,7 +315,11 @@ sysctl_hostname(SYSCTL_HANDLER_ARGS)
 	KASSERT(len <= sizeof(tmpname),
 	    ("length %d too long for %s", len, __func__));
 
+#ifndef __rtems__
 	pr = req->td->td_ucred->cr_prison;
+#else /* __rtems__ */
+	pr = &prison0;
+#endif /* __rtems__ */
 	if (!(pr->pr_allow & PR_ALLOW_SET_HOSTNAME) && req->newptr)
 		return (EPERM);
 	/*
@@ -323,18 +337,27 @@ sysctl_hostname(SYSCTL_HANDLER_ARGS)
 		 * Copy the locally set hostname to all jails that share
 		 * this host info.
 		 */
+#ifndef __rtems__
 		sx_slock(&allprison_lock);
 		while (!(pr->pr_flags & PR_HOST))
 			pr = pr->pr_parent;
+#endif /* __rtems__ */
 		mtx_lock(&pr->pr_mtx);
 		bcopy(tmpname, (char *)pr + pr_offset, len);
+#ifndef __rtems__
 		FOREACH_PRISON_DESCENDANT_LOCKED(pr, cpr, descend)
 			if (cpr->pr_flags & PR_HOST)
 				descend = 0;
 			else
 				bcopy(tmpname, (char *)cpr + pr_offset, len);
+#else /* __rtems__ */
+		(void) cpr;
+		(void) descend;
+#endif /* __rtems__ */
 		mtx_unlock(&pr->pr_mtx);
+#ifndef __rtems__
 		sx_sunlock(&allprison_lock);
+#endif /* __rtems__ */
 	}
 	return (error);
 }
@@ -351,7 +374,9 @@ SYSCTL_PROC(_kern, KERN_HOSTUUID, hostuuid,
     CTLTYPE_STRING | CTLFLAG_RW | CTLFLAG_PRISON | CTLFLAG_CAPRD | CTLFLAG_MPSAFE,
     (void *)(offsetof(struct prison, pr_hostuuid)), HOSTUUIDLEN,
     sysctl_hostname, "A", "Host UUID");
+#endif /* RTEMS_BSD_MODULE_NETINET || RTEMS_BSD_MODULE_NETINET6 */
 
+#ifndef __rtems__
 static int	regression_securelevel_nonmonotonic = 0;
 
 #ifdef REGRESSION
@@ -490,9 +515,11 @@ sysctl_osreldate(SYSCTL_HANDLER_ARGS)
 SYSCTL_PROC(_kern, KERN_OSRELDATE, osreldate,
     CTLTYPE_INT | CTLFLAG_CAPRD | CTLFLAG_RD | CTLFLAG_MPSAFE,
     NULL, 0, sysctl_osreldate, "I", "Kernel release date");
+#endif /* __rtems__ */
 
 SYSCTL_NODE(_kern, OID_AUTO, features, CTLFLAG_RD, 0, "Kernel Features");
 
+#ifndef __rtems__
 #ifdef COMPAT_FREEBSD4
 FEATURE(compat_freebsd4, "Compatible with FreeBSD 4");
 #endif
@@ -615,3 +642,4 @@ SYSCTL_INT(_debug_sizeof, OID_AUTO, pcb, CTLFLAG_RD,
 SYSCTL_INT(_kern, OID_AUTO, fallback_elf_brand, CTLFLAG_RW,
     &__elfN(fallback_brand), sizeof(__elfN(fallback_brand)),
     "compatibility for kern.fallback_elf_brand");
+#endif /* __rtems__ */

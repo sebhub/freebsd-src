@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1992, 1993, 1994, 1995, 1996
  *	The Regents of the University of California.  All rights reserved.
@@ -59,3 +63,6 @@ bpf_dump(const struct bpf_program *p, int option)
 		puts(bpf_image(insn, i));
 	}
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-bpf_dump-data.h"
+#endif /* __rtems__ */

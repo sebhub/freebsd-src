@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -59,6 +63,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -98,6 +105,9 @@
 
 #include <lib80211/lib80211_regdomain.h>
 #include <lib80211/lib80211_ioctl.h>
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-ifieee80211-data.h"
+#endif /* __rtems__ */
 
 #ifndef IEEE80211_FIXED_RATE_NONE
 #define	IEEE80211_FIXED_RATE_NONE	0xff
@@ -3657,7 +3667,11 @@ printmimo(const struct ieee80211_mimo_info *mi)
 static void
 list_scan(int s)
 {
+#ifndef __rtems__
 	uint8_t buf[24*1024];
+#else /* __rtems__ */
+	static uint8_t buf[24*1024];
+#endif /* __rtems__ */
 	char ssid[IEEE80211_NWID_LEN+1];
 	const uint8_t *cp;
 	int len, idlen;
@@ -5960,7 +5974,11 @@ static struct afswtch af_ieee80211 = {
 	.af_other_status = ieee80211_status,
 };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+void
+#endif /* __rtems__ */
 ieee80211_ctor(void)
 {
 	int i;

@@ -34,9 +34,14 @@
 #include <sys/cdefs.h>
 #include <sys/_types.h>
 
+#ifndef __rtems__
 #include <machine/_stdint.h>
 #include <sys/_stdint.h>
+#else /* __rtems__ */
+#include <stdint.h>
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 typedef	__int_least8_t		int_least8_t;
 typedef	__int_least16_t		int_least16_t;
 typedef	__int_least32_t		int_least32_t;
@@ -67,6 +72,7 @@ typedef	__uint_fast64_t		uint_fast64_t;
 /* Limits of wchar_t. */
 #define	WCHAR_MIN	__WCHAR_MIN
 #define	WCHAR_MAX	__WCHAR_MAX
+#endif /* __rtems__ */
 
 #if __EXT1_VISIBLE
 /* ISO/IEC 9899:2011 K.3.4.4 */

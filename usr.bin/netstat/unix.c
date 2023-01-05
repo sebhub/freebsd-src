@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-netstat-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -35,6 +39,9 @@ static char sccsid[] = "@(#)unix.c	8.1 (Berkeley) 6/6/93";
 #endif /* not lint */
 #endif
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -66,6 +73,9 @@ __FBSDID("$FreeBSD$");
 #include <kvm.h>
 #include <libxo/xo.h>
 #include "netstat.h"
+#ifdef __rtems__
+#include "rtems-bsd-netstat-unix-data.h"
+#endif /* __rtems__ */
 
 static	void unixdomainpr(struct xunpcb *, struct xsocket *);
 
@@ -100,6 +110,7 @@ pcblist_sysctl(int type, char **bufp)
 	return (0);
 }
 
+#ifndef __rtems__
 static int
 pcblist_kvm(u_long count_off, u_long gencnt_off, u_long head_off, char **bufp)
 {
@@ -193,7 +204,9 @@ fail:
 #undef COPYOUT
 #undef KREAD
 }
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 void
 unixpr(u_long count_off, u_long gencnt_off, u_long dhead_off, u_long shead_off,
     u_long sphead_off, bool *first)
@@ -268,7 +281,9 @@ unixpr(u_long count_off, u_long gencnt_off, u_long dhead_off, u_long shead_off,
 		free(buf);
 	}
 }
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 static void
 unixdomainpr(struct xunpcb *xunp, struct xsocket *so)
 {
@@ -327,3 +342,4 @@ unixdomainpr(struct xunpcb *xunp, struct xsocket *so)
 		    sa->sun_path);
 	xo_emit("\n");
 }
+#endif /* __rtems__ */

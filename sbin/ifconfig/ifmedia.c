@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*	$NetBSD: ifconfig.c,v 1.34 1997/04/21 01:17:58 lukem Exp $	*/
 /* $FreeBSD$ */
 
@@ -64,6 +68,9 @@
  * SUCH DAMAGE.
  */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -87,6 +94,24 @@
 #include <unistd.h>
 
 #include "ifconfig.h"
+#ifdef __rtems__
+struct ifmedia_type_to_subtype {
+	struct {
+		struct ifmedia_description *desc;
+		int alias;
+	} subtypes[5];
+	struct {
+		struct ifmedia_description *desc;
+		int alias;
+	} options[4];
+	struct {
+		struct ifmedia_description *desc;
+		int alias;
+	} modes[3];
+};
+
+#include "rtems-bsd-ifconfig-ifmedia-data.h"
+#endif /* __rtems__ */
 
 static void	domediaopt(const char *, int, int);
 static int	get_media_subtype(int, const char *);
@@ -216,15 +241,25 @@ media_status(int s)
 	free(media_list);
 }
 
+#ifdef __rtems__
+static struct ifmediareq *ifmedia_getstate_ifmr = NULL;
+#endif /* __rtems__ */
 struct ifmediareq *
 ifmedia_getstate(int s)
 {
+#ifndef __rtems__
 	static struct ifmediareq *ifmr = NULL;
+#else /* __rtems__ */
+	struct ifmediareq *ifmr = ifmedia_getstate_ifmr;
+#endif /* __rtems__ */
 	int *mwords;
 	int xmedia = 1;
 
 	if (ifmr == NULL) {
 		ifmr = (struct ifmediareq *)malloc(sizeof(struct ifmediareq));
+#ifdef __rtems__
+		ifmedia_getstate_ifmr = ifmr;
+#endif /* __rtems__ */
 		if (ifmr == NULL)
 			err(1, "malloc");
 
@@ -268,11 +303,16 @@ ifmedia_getstate(int s)
 	return ifmr;
 }
 
+#ifdef __rtems__
+static int did_it = 0;
+#endif /* __rtems__ */
 static void
 setifmediacallback(int s, void *arg)
 {
 	struct ifmediareq *ifmr = (struct ifmediareq *)arg;
+#ifndef __rtems__
 	static int did_it = 0;
+#endif /* __rtems__ */
 
 	if (!did_it) {
 		ifr.ifr_media = ifmr->ifm_current;
@@ -438,6 +478,7 @@ static struct ifmedia_description ifm_shared_option_descriptions[] =
 static struct ifmedia_description ifm_shared_option_aliases[] =
     IFM_SHARED_OPTION_ALIASES;
 
+#ifndef __rtems__
 struct ifmedia_type_to_subtype {
 	struct {
 		struct ifmedia_description *desc;
@@ -452,6 +493,7 @@ struct ifmedia_type_to_subtype {
 		int alias;
 	} modes[3];
 };
+#endif /* __rtems__ */
 
 /* must be in the same order as IFM_TYPE_DESCRIPTIONS */
 static struct ifmedia_type_to_subtype ifmedia_types_to_subtypes[] = {
@@ -804,7 +846,11 @@ static struct afswtch af_media = {
 	.af_other_status = media_status,
 };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+void
+#endif /* __rtems__ */
 ifmedia_ctor(void)
 {
 	size_t i;

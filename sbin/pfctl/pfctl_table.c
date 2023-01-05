@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-namespace.h"
+#endif /* __rtems__ */
+
 /*	$OpenBSD: pfctl_table.c,v 1.67 2008/06/10 20:55:02 mcbride Exp $ */
 
 /*-
@@ -35,6 +39,9 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -55,6 +62,9 @@ __FBSDID("$FreeBSD$");
 
 #include "pfctl_parser.h"
 #include "pfctl.h"
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-pfctl_table-data.h"
+#endif /* __rtems__ */
 
 extern void	usage(void);
 static int	pfctl_table(int, char *[], char *, const char *, char *,
@@ -495,7 +505,11 @@ print_astats(struct pfr_astats *as, int dns)
 void
 radix_perror(void)
 {
+#ifndef __rtems__
 	extern char *__progname;
+#else /* __rtems__ */
+#define __progname "pfctl"
+#endif /* __rtems__ */
 	fprintf(stderr, "%s: %s.\n", __progname, pfr_strerror(errno));
 }
 

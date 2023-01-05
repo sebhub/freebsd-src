@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1998-2006 The TCPDUMP project
  *
@@ -762,3 +766,6 @@ tooshort:
 trunc:
     ND_PRINT((ndo, "\n\t\t packet exceeded snapshot"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-cfm-data.h"
+#endif /* __rtems__ */

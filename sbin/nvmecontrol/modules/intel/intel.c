@@ -29,6 +29,9 @@
  * SUCH DAMAGE.
  */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -46,7 +49,7 @@ __FBSDID("$FreeBSD$");
 #include <unistd.h>
 #include <sys/endian.h>
 
-#include "nvmecontrol.h"
+#include "../../nvmecontrol.h"
 
 /*
  * Intel specific log pages from

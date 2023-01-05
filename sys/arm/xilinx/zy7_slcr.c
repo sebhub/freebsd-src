@@ -41,6 +41,10 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#ifdef __rtems__
+#include <sys/bus.h>
+#include <bsp.h>
+#endif /* __rtems__ */
 #include <sys/conf.h>
 #include <sys/kernel.h>
 #include <sys/module.h>
@@ -54,8 +58,10 @@ __FBSDID("$FreeBSD$");
 #include <machine/resource.h>
 #include <machine/stdarg.h>
 
+#ifndef __rtems__
 #include <dev/ofw/ofw_bus.h>
 #include <dev/ofw/ofw_bus_subr.h>
+#endif /* __rtems__ */
 
 #include <arm/xilinx/zy7_slcr.h>
 
@@ -66,7 +72,9 @@ struct zy7_slcr_softc {
 };
 
 static struct zy7_slcr_softc *zy7_slcr_softc_p;
+#ifndef __rtems__
 extern void (*zynq7_cpu_reset);
+#endif /* __rtems__ */
 
 #define ZSLCR_LOCK(sc)		mtx_lock(&(sc)->sc_mtx)
 #define	ZSLCR_UNLOCK(sc)		mtx_unlock(&(sc)->sc_mtx)
@@ -126,6 +134,7 @@ zy7_slcr_lock(struct zy7_slcr_softc *sc)
 	WR4(sc, ZY7_SLCR_LOCK, ZY7_SLCR_LOCK_MAGIC);
 }
 
+#ifndef __rtems__
 static void
 zy7_slcr_cpu_reset(void)
 {
@@ -174,6 +183,7 @@ zy7_slcr_preload_pl(void)
 
 	ZSLCR_UNLOCK(sc);
 }
+#endif /* __rtems__ */
 
 /* After PL configuration, enable level shifters and deassert top-level
  * PL resets.  Called from zy7_devcfg.c.  Optionally, the level shifters
@@ -206,6 +216,7 @@ zy7_slcr_postload_pl(int en_level_shifters)
 	ZSLCR_UNLOCK(sc);
 }
 
+#if defined(LIBBSP_ARM_XILINX_ZYNQ_BSP_H)
 /* Override cgem_set_refclk() in gigabit ethernet driver
  * (sys/dev/cadence/if_cgem.c).  This function is called to
  * request a change in the gem's reference clock speed.
@@ -253,6 +264,7 @@ cgem_set_ref_clk(int unit, int frequency)
 
 	return (0);
 }
+#endif /* LIBBSP_ARM_XILINX_ZYNQ_BSP_H */
 
 /* 
  * PL clocks management function
@@ -548,11 +560,13 @@ static int
 zy7_slcr_probe(device_t dev)
 {
 
+#ifndef __rtems__
 	if (!ofw_bus_status_okay(dev))
 		return (ENXIO);
 
 	if (!ofw_bus_is_compatible(dev, "xlnx,zy7_slcr"))
 		return (ENXIO);
+#endif /* __rtems__ */
 
 	device_set_desc(dev, "Zynq-7000 slcr block");
 	return (0);
@@ -563,8 +577,10 @@ zy7_slcr_attach(device_t dev)
 {
 	struct zy7_slcr_softc *sc = device_get_softc(dev);
 	int rid;
+#ifndef __rtems__
 	phandle_t node;
 	pcell_t cell;
+#endif /* __rtems__ */
 	uint32_t bootmode;
 	uint32_t pss_idcode;
 	uint32_t arm_pll_ctrl;
@@ -594,7 +610,9 @@ zy7_slcr_attach(device_t dev)
 
 	/* Hook up cpu_reset. */
 	zy7_slcr_softc_p = sc;
+#ifndef __rtems__
 	zynq7_cpu_reset = zy7_slcr_cpu_reset;
+#endif /* __rtems__ */
 
 	/* Read info and set sysctls. */
 	bootmode = RD4(sc, ZY7_SLCR_BOOT_MODE);
@@ -621,10 +639,12 @@ zy7_slcr_attach(device_t dev)
 	zynq_reboot_status = RD4(sc, ZY7_SLCR_REBOOT_STAT);
 
 	/* Derive PLL frequencies from PS_CLK. */
+#ifndef __rtems__
 	node = ofw_bus_get_node(dev);
 	if (OF_getencprop(node, "clock-frequency", &cell, sizeof(cell)) > 0)
 		ps_clk_frequency = cell;
 	else
+#endif /* __rtems__ */
 		ps_clk_frequency = ZYNQ_DEFAULT_PS_CLK_FREQUENCY;
 
 	arm_pll_ctrl = RD4(sc, ZY7_SLCR_ARM_PLL_CTRL);
@@ -686,7 +706,9 @@ zy7_slcr_detach(device_t dev)
 			     rman_get_rid(sc->mem_res), sc->mem_res);
 
 	zy7_slcr_softc_p = NULL;
+#ifndef __rtems__
 	zynq7_cpu_reset = NULL;
+#endif /* __rtems__ */
 
 	ZSLCR_LOCK_DESTROY(sc);
 
@@ -709,5 +731,9 @@ static driver_t zy7_slcr_driver = {
 };
 static devclass_t zy7_slcr_devclass;
 
+#ifndef __rtems__
 DRIVER_MODULE(zy7_slcr, simplebus, zy7_slcr_driver, zy7_slcr_devclass, 0, 0);
+#else /* __rtems__ */
+DRIVER_MODULE(zy7_slcr, nexus, zy7_slcr_driver, zy7_slcr_devclass, 0, 0);
+#endif /* __rtems__ */
 MODULE_VERSION(zy7_slcr, 1);

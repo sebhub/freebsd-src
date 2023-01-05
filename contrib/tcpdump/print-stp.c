@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2000 Lennert Buytenhek
  *
@@ -508,3 +512,6 @@ trunc:
  * c-basic-offset: 4
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-stp-data.h"
+#endif /* __rtems__ */

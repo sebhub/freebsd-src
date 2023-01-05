@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1988, 1989, 1990, 1991, 1993, 1994
  *	The Regents of the University of California.  All rights reserved.
@@ -588,7 +592,7 @@ static const struct tok mldv2report2str[] = {
 static const char *
 get_rtpref(u_int v)
 {
-	static const char *rtpref_str[] = {
+	static const char * const rtpref_str[] = {
 		"medium",		/* 00 */
 		"high",			/* 01 */
 		"rsv",			/* 10 */
@@ -1959,3 +1963,6 @@ trunc:
  * c-basic-offset: 8
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-icmp6-data.h"
+#endif /* __rtems__ */

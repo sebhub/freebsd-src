@@ -245,7 +245,9 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 		error = in_difaddr_ioctl(cmd, data, ifp, td);
 		sx_xunlock(&in_control_sx);
 		return (error);
+#ifndef __rtems__
 	case OSIOCAIFADDR:	/* 9.x compat */
+#endif /* __rtems__ */
 	case SIOCAIFADDR:
 		sx_xlock(&in_control_sx);
 		error = in_aifaddr_ioctl(cmd, data, ifp, td);

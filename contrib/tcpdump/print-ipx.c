@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1994, 1995, 1996
  *	The Regents of the University of California.  All rights reserved.
@@ -236,3 +240,6 @@ ipx_rip_print(netdissect_options *ndo, const u_short *ipx, u_int length)
 trunc:
     ND_PRINT((ndo, "[|ipx %d]", length));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-ipx-data.h"
+#endif /* __rtems__ */

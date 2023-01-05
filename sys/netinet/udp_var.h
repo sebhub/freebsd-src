@@ -104,6 +104,10 @@ struct udpstat {
 
 #ifdef _KERNEL
 #include <sys/counter.h>
+#ifdef __rtems__
+#include <errno.h>
+#undef errno
+#endif /* __rtems__ */
 
 VNET_PCPUSTAT_DECLARE(struct udpstat, udpstat);
 /*

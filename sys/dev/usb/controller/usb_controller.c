@@ -97,6 +97,7 @@ SYSCTL_INT(_hw_usb, OID_AUTO, no_boot_wait, CTLFLAG_RDTUN, &usb_no_boot_wait, 0,
     "No USB device enumerate waiting at boot.");
 #endif
 
+#ifndef __rtems__
 static int usb_no_suspend_wait = 0;
 SYSCTL_INT(_hw_usb, OID_AUTO, no_suspend_wait, CTLFLAG_RWTUN,
     &usb_no_suspend_wait, 0, "No USB device waiting at system suspend.");
@@ -104,6 +105,7 @@ SYSCTL_INT(_hw_usb, OID_AUTO, no_suspend_wait, CTLFLAG_RWTUN,
 static int usb_no_shutdown_wait = 0;
 SYSCTL_INT(_hw_usb, OID_AUTO, no_shutdown_wait, CTLFLAG_RWTUN,
     &usb_no_shutdown_wait, 0, "No USB device waiting at system shutdown.");
+#endif /* __rtems__ */
 
 static devclass_t usb_devclass;
 
@@ -155,11 +157,13 @@ usb_probe(device_t dev)
 static void
 usb_root_mount_rel(struct usb_bus *bus)
 {
+#ifndef __rtems__
 	if (bus->bus_roothold != NULL) {
 		DPRINTF("Releasing root mount hold %p\n", bus->bus_roothold);
 		root_mount_rel(bus->bus_roothold);
 		bus->bus_roothold = NULL;
 	}
+#endif /* __rtems__ */
 }
 #endif
 
@@ -184,6 +188,7 @@ usb_attach(device_t dev)
 		bus->bus_roothold = root_mount_hold(device_get_nameunit(dev));
 	}
 #endif
+
 	usb_attach_sub(dev, bus);
 
 	return (0);			/* return success */
@@ -268,11 +273,13 @@ usb_suspend(device_t dev)
 	USB_BUS_LOCK(bus);
 	usb_proc_msignal(USB_BUS_EXPLORE_PROC(bus),
 	    &bus->suspend_msg[0], &bus->suspend_msg[1]);
+#ifndef __rtems__
 	if (usb_no_suspend_wait == 0) {
 		/* wait for suspend callback to be executed */
 		usb_proc_mwait(USB_BUS_EXPLORE_PROC(bus),
 		    &bus->suspend_msg[0], &bus->suspend_msg[1]);
 	}
+#endif /* __rtems__ */
 	USB_BUS_UNLOCK(bus);
 
 	return (0);
@@ -341,6 +348,7 @@ usb_shutdown(device_t dev)
 	DPRINTF("%s: Controller shutdown\n", device_get_nameunit(bus->bdev));
 
 	USB_BUS_LOCK(bus);
+#ifndef __rtems__
 	usb_proc_msignal(USB_BUS_EXPLORE_PROC(bus),
 	    &bus->shutdown_msg[0], &bus->shutdown_msg[1]);
 	if (usb_no_shutdown_wait == 0) {
@@ -348,6 +356,7 @@ usb_shutdown(device_t dev)
 		usb_proc_mwait(USB_BUS_EXPLORE_PROC(bus),
 		    &bus->shutdown_msg[0], &bus->shutdown_msg[1]);
 	}
+#endif /* __rtems__ */
 	USB_BUS_UNLOCK(bus);
 
 	DPRINTF("%s: Controller shutdown complete\n",

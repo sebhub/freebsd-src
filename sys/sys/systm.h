@@ -46,13 +46,27 @@
 #include <sys/callout.h>
 #include <sys/queue.h>
 #include <sys/stdint.h>		/* for people using printf mainly */
+#ifdef __rtems__
+#include <string.h>
+#include <rtems/score/threaddispatch.h>
+#endif /* __rtems__ */
 
 __NULLABILITY_PRAGMA_PUSH
 
+#ifndef __rtems__
 extern int cold;		/* nonzero if we are doing a cold boot */
 extern int suspend_blocked;	/* block suspend due to pending shutdown */
 extern int rebooting;		/* kern_reboot() has been called. */
+#else /* __rtems__ */
+/* In RTEMS there is no cold boot and reboot */
+#define cold 0
+#define rebooting 0
+#endif /* __rtems__ */
+#ifndef __rtems__
 extern const char *panicstr;	/* panic message */
+#else /* __rtems__ */
+#define panicstr NULL
+#endif /* __rtems__ */
 extern char version[];		/* system version */
 extern char compiler_version[];	/* compiler version */
 extern char copyright[];	/* system copyright */
@@ -65,11 +79,25 @@ extern long realmem;		/* 'real' memory */
 extern char *rootdevnames[2];	/* names of possible root devices */
 
 extern int boothowto;		/* reboot flags, from console subsystem */
+#ifndef __rtems__
 extern int bootverbose;		/* nonzero to print verbose messages */
+#else /* __rtems__ */
+#ifdef BOOTVERBOSE
+extern int rtems_bsd_bootverbose; /* nonzero to print verbose messages */
+#define bootverbose rtems_bsd_bootverbose
+#else
+#define bootverbose    0        /* Remove all verbose code for the standard RTEMS build */
+#endif /* BOOTVERBOSE */
+#endif /* __rtems__ */
+
 
 extern int maxusers;		/* system tune hint */
 extern int ngroups_max;		/* max # of supplemental groups */
+#ifndef __rtems__
 extern int vm_guest;		/* Running as virtual machine guest? */
+#else /* __rtems__ */
+#define vm_guest VM_GUEST_NO
+#endif /* __rtems__ */
 
 /*
  * Detected virtual machine guest types. The intention is to expand
@@ -149,10 +177,14 @@ void	kassert_panic(const char *fmt, ...)  __printflike(1, 2);
  * Otherwise, the kernel will deadlock since the scheduler isn't
  * going to run the thread that holds any lock we need.
  */
+#ifndef __rtems__
 #define	SCHEDULER_STOPPED_TD(td)  ({					\
 	MPASS((td) == curthread);					\
 	__predict_false((td)->td_stopsched);				\
 })
+#else /* __rtems__ */
+#define	SCHEDULER_STOPPED_TD(td) 0
+#endif /* __rtems__ */
 #define	SCHEDULER_STOPPED() SCHEDULER_STOPPED_TD(curthread)
 
 /*
@@ -208,8 +240,10 @@ struct _jmp_buf;
 struct trapframe;
 struct eventtimer;
 
+#ifndef __rtems__
 int	setjmp(struct _jmp_buf *) __returns_twice;
 void	longjmp(struct _jmp_buf *, int) __dead2;
+#endif /* __rtems__ */
 int	dumpstatus(vm_offset_t addr, off_t count);
 int	nullop(void);
 int	eopnotsupp(void);
@@ -244,16 +278,21 @@ void	tablefull(const char *);
 static __inline void
 critical_enter(void)
 {
+#ifndef __rtems__
 	struct thread_lite *td;
 
 	td = (struct thread_lite *)curthread;
 	td->td_critnest++;
 	__compiler_membar();
+#else /* __rtems__ */
+	_Thread_Dispatch_disable();
+#endif /* __rtems__ */
 }
 
 static __inline void
 critical_exit(void)
 {
+#ifndef __rtems__
 	struct thread_lite *td;
 
 	td = (struct thread_lite *)curthread;
@@ -264,6 +303,9 @@ critical_exit(void)
 	__compiler_membar();
 	if (__predict_false(td->td_owepreempt))
 		critical_exit_preempt();
+#else /* __rtems__ */
+	_Thread_Dispatch_enable(_Per_CPU_Get());
+#endif /* __rtems__ */
 
 }
 #endif
@@ -295,8 +337,27 @@ int	sscanf(const char *, char const * _Nonnull, ...) __scanflike(2, 3);
 int	vsscanf(const char * _Nonnull, char const * _Nonnull, __va_list)  __scanflike(2, 0);
 long	strtol(const char *, char **, int);
 u_long	strtoul(const char *, char **, int);
+#ifndef __rtems__
 quad_t	strtoq(const char *, char **, int);
 u_quad_t strtouq(const char *, char **, int);
+#else /* __rtems__ */
+long long strtoll(const char *, char **, int);
+unsigned long long strtoull(const char *, char **, int);
+
+static inline quad_t
+strtoq(const char *nptr, char **endptr, int base)
+{
+
+	return (strtoll(nptr, endptr, base));
+}
+
+static inline u_quad_t
+strtouq(const char *nptr, char **endptr, int base)
+{
+
+	return (strtoull(nptr, endptr, base));
+}
+#endif /* __rtems__ */
 void	tprintf(struct proc *p, int pri, const char *, ...) __printflike(3, 4);
 void	vtprintf(struct proc *, int, const char *, __va_list) __printflike(3, 0);
 void	hexdump(const void *ptr, int length, const char *hdr, int flags);
@@ -330,6 +391,7 @@ void	*memcpy_early(void * _Nonnull to, const void * _Nonnull from, size_t len);
 void	*memmove_early(void * _Nonnull dest, const void * _Nonnull src, size_t n);
 #define bcopy_early(from, to, len) memmove_early((to), (from), (len))
 
+#ifndef __rtems__
 int	copystr(const void * _Nonnull __restrict kfaddr,
 	    void * _Nonnull __restrict kdaddr, size_t len,
 	    size_t * __restrict lencopied);
@@ -345,7 +407,78 @@ int	copyout(const void * _Nonnull __restrict kaddr,
 int	copyout_nofault(const void * _Nonnull __restrict kaddr,
 	    void * __restrict udaddr, size_t len);
 
+#else /* __rtems__ */
+static inline int
+copystr(const void * _Nonnull __restrict kfaddr,
+	    void * _Nonnull __restrict kdaddr, size_t len,
+	    size_t * __restrict lencopied)
+{
+	size_t n = strlcpy((char*)kdaddr, (const char*)kfaddr, len);
+
+	if (lencopied != NULL) {
+		*lencopied = n + 1;
+	}
+
+	return (0);
+}
+
+static inline int
+copyinstr(const void * __restrict udaddr, void * __restrict kaddr,
+	    size_t len, size_t * __restrict lencopied)
+{
+	size_t n = strlcpy((char*)kaddr, (const char*)udaddr, len);
+
+	if (lencopied != NULL) {
+		*lencopied = n + 1;
+	}
+
+	return (0);
+}
+
+static inline int
+copyin(const void * __restrict udaddr, void * __restrict kaddr,
+    size_t len)
+{
+	memcpy(kaddr, udaddr, len);
+
+	return (0);
+}
+
+static inline int
+copyin_nofault(const void * __restrict udaddr, void * __restrict kaddr,
+    size_t len)
+{
+	return copyin(udaddr, kaddr, len);
+}
+
+static inline int
+copyout(const void * __restrict kaddr, void * __restrict udaddr,
+    size_t len)
+{
+	memcpy(udaddr, kaddr, len);
+
+	return (0);
+}
+
+static inline int
+copyout_nofault(const void * __restrict kaddr, void * __restrict udaddr,
+    size_t len)
+{
+	return copyout(kaddr, udaddr, len);
+}
+#endif /* __rtems__ */
+
+#ifndef __rtems__
 int	fubyte(volatile const void *base);
+#else /* __rtems__ */
+static inline int
+fubyte(const void *base)
+{
+  const unsigned char *byte_base = (const unsigned char *)base;
+
+  return byte_base[0];
+}
+#endif /* __rtems__ */
 long	fuword(volatile const void *base);
 int	fuword16(volatile const void *base);
 int32_t	fuword32(volatile const void *base);
@@ -371,9 +504,11 @@ int	sysbeep(int hertz, int period);
 
 void	hardclock(int cnt, int usermode);
 void	hardclock_sync(int cpu);
+#ifndef __rtems__
 void	softclock(void *);
 void	statclock(int cnt, int usermode);
 void	profclock(int cnt, int usermode, uintfptr_t pc);
+#endif /* __rtems__ */
 
 int	hardclockintr(void);
 
@@ -443,6 +578,9 @@ struct	callout_handle timeout(timeout_t *, void *, int);
 void	untimeout(timeout_t *, void *, struct callout_handle);
 
 /* Stubs for obsolete functions that used to be for interrupt management */
+#ifdef __rtems__
+typedef int intrmask_t;
+#endif /* __rtems__ */
 static __inline intrmask_t	splbio(void)		{ return 0; }
 static __inline intrmask_t	splcam(void)		{ return 0; }
 static __inline intrmask_t	splclock(void)		{ return 0; }
@@ -464,13 +602,21 @@ int	_sleep(void * _Nonnull chan, struct lock_object *lock, int pri,
 #define	msleep_sbt(chan, mtx, pri, wmesg, bt, pr, flags)		\
 	_sleep((chan), &(mtx)->lock_object, (pri), (wmesg), (bt), (pr),	\
 	    (flags))
+#ifndef __rtems__
 int	msleep_spin_sbt(void * _Nonnull chan, struct mtx *mtx,
 	    const char *wmesg, sbintime_t sbt, sbintime_t pr, int flags);
+#else /* __rtems__ */
+#define	msleep_spin_sbt(chan, mtx, wmesg, sbt, pr, flags)		\
+	msleep_sbt(chan, mtx, 0, wmesg, sbt, pr, flags)
+#endif /* __rtems__ */
 #define	msleep_spin(chan, mtx, wmesg, timo)				\
 	msleep_spin_sbt((chan), (mtx), (wmesg), tick_sbt * (timo),	\
 	    0, C_HARDCLOCK)
 int	pause_sbt(const char *wmesg, sbintime_t sbt, sbintime_t pr,
 	    int flags);
+#ifdef __rtems__
+#include <unistd.h>
+#endif /* __rtems__ */
 #define	pause(wmesg, timo)						\
 	pause_sbt((wmesg), tick_sbt * (timo), 0, C_HARDCLOCK)
 #define	pause_sig(wmesg, timo)						\
@@ -563,6 +709,7 @@ void counted_warning(unsigned *counter, const char *msg);
 /*
  * APIs to manage deprecation and obsolescence.
  */
+#ifndef __rtems__
 struct device;
 void _gone_in(int major, const char *msg);
 void _gone_in_dev(struct device *dev, int major, const char *msg);
@@ -578,6 +725,10 @@ void _gone_in_dev(struct device *dev, int major, const char *msg);
 #define	gone_by_fcp101_dev(dev)						\
 	gone_in_dev((dev), 13,						\
 	    "see https://github.com/freebsd/fcp/blob/master/fcp-0101.md")
+#else /* __rtems__ */
+#define gone_in(major, msg) do { } while (0)
+#define gone_in_dev(dev, major, msg) do { } while (0)
+#endif /* __rtems__ */
 
 __NULLABILITY_PRAGMA_POP
 

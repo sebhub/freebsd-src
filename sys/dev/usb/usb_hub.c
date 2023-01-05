@@ -1680,6 +1680,7 @@ uhub_child_location_string(device_t parent, device_t child,
 	struct uhub_softc *sc;
 	struct usb_hub *hub;
 	struct hub_result res;
+	char *ugen_name;
 
 	if (!device_is_attached(parent)) {
 		if (buflen)

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1993, 1994 Jeffrey C. Mogul, Digital Equipment Corporation,
  * Western Research Laboratory. All rights reserved.
@@ -480,3 +484,6 @@ is_UCX(const unsigned char *fhp, u_int len)
 
 	return(1);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-parsenfsfh-data.h"
+#endif /* __rtems__ */

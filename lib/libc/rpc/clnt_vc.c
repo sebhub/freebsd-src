@@ -83,6 +83,14 @@ __FBSDID("$FreeBSD$");
 #include "rpc_com.h"
 #include "mt_misc.h"
 
+#ifdef __rtems__
+#undef thr_sigsetmask
+#define thr_sigsetmask(_a, _b, _c)
+#define cond_signal(_a)
+#define sigfillset(_a)
+#define _sendmsg sendmsg
+#define _recvmsg recvmsg
+#endif /* __rtems__ */
 #define MCALL_MSG_SIZE 24
 
 struct cmessage {
@@ -217,10 +225,12 @@ clnt_vc_create(int fd, const struct netbuf *raddr, const rpcprog_t prog,
 			thr_sigsetmask(SIG_SETMASK, &(mask), NULL);
 			goto err;
 		} else {
+#ifndef __rtems__
 			int i;
 
 			for (i = 0; i < dtbsize; i++)
 				cond_init(&vc_cv[i], 0, (void *) 0);
+#endif /* __rtems__ */
 		}
 	} else
 		assert(vc_cv != (cond_t *) NULL);
@@ -334,8 +344,10 @@ clnt_vc_call(CLIENT *cl, rpcproc_t proc, xdrproc_t xdr_args, void *args_ptr,
 	sigfillset(&newmask);
 	thr_sigsetmask(SIG_SETMASK, &newmask, &mask);
 	mutex_lock(&clnt_fd_lock);
+#ifndef __rtems__
 	while (vc_fd_locks[ct->ct_fd])
 		cond_wait(&vc_cv[ct->ct_fd], &clnt_fd_lock);
+#endif /* __rtems__ */
 	if (__isthreaded)
                 rpc_lock_value = 1;
         else
@@ -487,8 +499,10 @@ clnt_vc_freeres(CLIENT *cl, xdrproc_t xdr_res, void *res_ptr)
 	sigfillset(&newmask);
 	thr_sigsetmask(SIG_SETMASK, &newmask, &mask);
 	mutex_lock(&clnt_fd_lock);
+#ifndef __rtems__
 	while (vc_fd_locks[ct->ct_fd])
 		cond_wait(&vc_cv[ct->ct_fd], &clnt_fd_lock);
+#endif /* __rtems__ */
 	xdrs->x_op = XDR_FREE;
 	dummy = (*xdr_res)(xdrs, res_ptr);
 	mutex_unlock(&clnt_fd_lock);
@@ -534,8 +548,10 @@ clnt_vc_control(CLIENT *cl, u_int request, void *info)
 	sigfillset(&newmask);
 	thr_sigsetmask(SIG_SETMASK, &newmask, &mask);
 	mutex_lock(&clnt_fd_lock);
+#ifndef __rtems__
 	while (vc_fd_locks[ct->ct_fd])
 		cond_wait(&vc_cv[ct->ct_fd], &clnt_fd_lock);
+#endif /* __rtems__ */
 	if (__isthreaded)
                 rpc_lock_value = 1;
         else
@@ -651,8 +667,10 @@ clnt_vc_destroy(CLIENT *cl)
 	sigfillset(&newmask);
 	thr_sigsetmask(SIG_SETMASK, &newmask, &mask);
 	mutex_lock(&clnt_fd_lock);
+#ifndef __rtems__
 	while (vc_fd_locks[ct_fd])
 		cond_wait(&vc_cv[ct_fd], &clnt_fd_lock);
+#endif /* __rtems__ */
 	if (ct->ct_closeit && ct->ct_fd != -1) {
 		(void)_close(ct->ct_fd);
 	}

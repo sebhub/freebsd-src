@@ -75,6 +75,7 @@ static struct thread_local_inits_st *ossl_init_get_thread_local(int alloc)
     return local;
 }
 
+#ifndef __rtems__
 typedef struct ossl_init_stop_st OPENSSL_INIT_STOP;
 struct ossl_init_stop_st {
     void (*handler)(void);
@@ -82,6 +83,7 @@ struct ossl_init_stop_st {
 };
 
 static OPENSSL_INIT_STOP *stop_handlers = NULL;
+#endif /* __rtems__ */
 static CRYPTO_RWLOCK *init_lock = NULL;
 
 static CRYPTO_ONCE base = CRYPTO_ONCE_STATIC_INIT;
@@ -117,6 +119,7 @@ err:
     return 0;
 }
 
+#ifndef __rtems__
 static CRYPTO_ONCE register_atexit = CRYPTO_ONCE_STATIC_INIT;
 #if !defined(OPENSSL_SYS_UEFI) && defined(_WIN32)
 static int win32atexit(void)
@@ -154,6 +157,7 @@ DEFINE_RUN_ONCE_STATIC_ALT(ossl_init_no_register_atexit,
     /* Do nothing in this case */
     return 1;
 }
+#endif /* __rtems__ */
 
 static CRYPTO_ONCE load_crypto_nodelete = CRYPTO_ONCE_STATIC_INIT;
 DEFINE_RUN_ONCE_STATIC(ossl_init_load_crypto_nodelete)
@@ -179,7 +183,7 @@ DEFINE_RUN_ONCE_STATIC(ossl_init_load_crypto_nodelete)
 #  endif
         return (ret == TRUE) ? 1 : 0;
     }
-# elif !defined(DSO_NONE)
+# elif !defined(DSO_NONE) && !defined(__rtems__)
     /*
      * Deliberately leak a reference to ourselves. This will force the library
      * to remain loaded until the atexit() handler is run at process exit.
@@ -354,6 +358,7 @@ DEFINE_RUN_ONCE_STATIC(ossl_init_engine_rdrand)
     return 1;
 }
 # endif
+#ifndef __rtems__
 static CRYPTO_ONCE engine_dynamic = CRYPTO_ONCE_STATIC_INIT;
 DEFINE_RUN_ONCE_STATIC(ossl_init_engine_dynamic)
 {
@@ -364,6 +369,7 @@ DEFINE_RUN_ONCE_STATIC(ossl_init_engine_dynamic)
     engine_load_dynamic_int();
     return 1;
 }
+#endif /* __rtems__ */
 # ifndef OPENSSL_NO_STATIC_ENGINE
 #  if !defined(OPENSSL_NO_HW) && !defined(OPENSSL_NO_HW_PADLOCK)
 static CRYPTO_ONCE engine_padlock = CRYPTO_ONCE_STATIC_INIT;
@@ -494,6 +500,7 @@ int ossl_init_thread_start(uint64_t opts)
     return 1;
 }
 
+#ifndef __rtems__
 void OPENSSL_cleanup(void)
 {
     OPENSSL_INIT_STOP *currhandler, *lasthandler;
@@ -611,6 +618,7 @@ void OPENSSL_cleanup(void)
 
     base_inited = 0;
 }
+#endif /* __rtems__ */
 
 /*
  * If this function is called with a non NULL settings value then it must be
@@ -641,6 +649,7 @@ int OPENSSL_init_crypto(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings)
     if (opts & OPENSSL_INIT_BASE_ONLY)
         return 1;
 
+#ifndef __rtems__
     /*
      * Now we don't always set up exit handlers, the INIT_BASE_ONLY calls
      * should not have the side-effect of setting up exit handlers, and
@@ -654,6 +663,7 @@ int OPENSSL_init_crypto(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings)
     } else if (!RUN_ONCE(&register_atexit, ossl_init_register_atexit)) {
         return 0;
     }
+#endif /* __rtems__ */
 
     if (!RUN_ONCE(&load_crypto_nodelete, ossl_init_load_crypto_nodelete))
         return 0;
@@ -723,9 +733,11 @@ int OPENSSL_init_crypto(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings)
             && !RUN_ONCE(&engine_rdrand, ossl_init_engine_rdrand))
         return 0;
 # endif
+#ifndef __rtems__
     if ((opts & OPENSSL_INIT_ENGINE_DYNAMIC)
             && !RUN_ONCE(&engine_dynamic, ossl_init_engine_dynamic))
         return 0;
+#endif /* __rtems__ */
 # ifndef OPENSSL_NO_STATIC_ENGINE
 #  if !defined(OPENSSL_NO_HW) && !defined(OPENSSL_NO_HW_PADLOCK)
     if ((opts & OPENSSL_INIT_ENGINE_PADLOCK)
@@ -759,6 +771,7 @@ int OPENSSL_init_crypto(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings)
     return 1;
 }
 
+#ifndef __rtems__
 int OPENSSL_atexit(void (*handler)(void))
 {
     OPENSSL_INIT_STOP *newhand;
@@ -824,6 +837,7 @@ int OPENSSL_atexit(void (*handler)(void))
 
     return 1;
 }
+#endif /* __rtems__ */
 
 #ifdef OPENSSL_SYS_UNIX
 /*

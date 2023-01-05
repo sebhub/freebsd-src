@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2000 William C. Fenner.
  *                All rights reserved.
@@ -185,3 +189,6 @@ vrrp_print(netdissect_options *ndo,
 trunc:
 	ND_PRINT((ndo, "[|vrrp]"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-vrrp-data.h"
+#endif /* __rtems__ */

@@ -277,7 +277,9 @@ static void engine_cpy(ENGINE *dest, const ENGINE *src)
 ENGINE *ENGINE_by_id(const char *id)
 {
     ENGINE *iterator;
+#ifndef __rtems__
     char *load_dir = NULL;
+#endif /* __rtems__ */
     if (id == NULL) {
         ENGINEerr(ENGINE_F_ENGINE_BY_ID, ERR_R_PASSED_NULL_PARAMETER);
         return NULL;
@@ -313,6 +315,7 @@ ENGINE *ENGINE_by_id(const char *id)
     CRYPTO_THREAD_unlock(global_engine_lock);
     if (iterator != NULL)
         return iterator;
+#ifndef __rtems__
     /*
      * Prevent infinite recursion if we're looking for the dynamic engine.
      */
@@ -330,6 +333,7 @@ ENGINE *ENGINE_by_id(const char *id)
         return iterator;
     }
  notfound:
+#endif /* __rtems__ */
     ENGINE_free(iterator);
     ENGINEerr(ENGINE_F_ENGINE_BY_ID, ENGINE_R_NO_SUCH_ENGINE);
     ERR_add_error_data(2, "id=", id);

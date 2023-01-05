@@ -31,6 +31,9 @@
  *	@(#)sys_socket.c	8.1 (Berkeley) 6/10/93
  */
 
+#ifdef __rtems__
+#include <sys/file.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -72,6 +75,7 @@ __FBSDID("$FreeBSD$");
 
 #include <security/mac/mac_framework.h>
 
+#ifndef __rtems__
 #include <vm/vm.h>
 #include <vm/pmap.h>
 #include <vm/vm_extern.h>
@@ -92,7 +96,9 @@ static fo_rdwr_t soo_read;
 static fo_rdwr_t soo_write;
 static fo_ioctl_t soo_ioctl;
 static fo_poll_t soo_poll;
+#endif /* __rtems__ */
 extern fo_kqfilter_t soo_kqfilter;
+#ifndef __rtems__
 static fo_stat_t soo_stat;
 static fo_close_t soo_close;
 static fo_fill_kinfo_t soo_fill_kinfo;
@@ -116,8 +122,13 @@ struct fileops	socketops = {
 	.fo_aio_queue = soo_aio_queue,
 	.fo_flags = DFLAG_PASSABLE
 };
+#endif /* __rtems__ */
 
+#ifdef __rtems__
+int
+#else /* __rtems__ */
 static int
+#endif /* __rtems__ */
 soo_read(struct file *fp, struct uio *uio, struct ucred *active_cred,
     int flags, struct thread *td)
 {
@@ -132,8 +143,74 @@ soo_read(struct file *fp, struct uio *uio, struct ucred *active_cred,
 	error = soreceive(so, 0, uio, 0, 0, 0);
 	return (error);
 }
+#ifdef __rtems__
+static ssize_t
+rtems_bsd_soo_read(rtems_libio_t *iop, void *buffer, size_t count)
+{
+	struct thread *td = rtems_bsd_get_curthread_or_null();
+	struct iovec iov = {
+		.iov_base = buffer,
+		.iov_len = count
+	};
+	struct uio auio = {
+		.uio_iov = &iov,
+		.uio_iovcnt = 1,
+		.uio_offset = 0,
+		.uio_resid = count,
+		.uio_segflg = UIO_USERSPACE,
+		.uio_rw = UIO_READ,
+		.uio_td = td
+	};
+	int error;
 
+	if (td != NULL) {
+		error = soo_read(iop, &auio, NULL, 0, NULL);
+	} else {
+		error = ENOMEM;
+	}
+
+	if (error == 0) {
+		return (count - auio.uio_resid);
+	} else {
+		rtems_set_errno_and_return_minus_one(error);
+	}
+}
+
+static ssize_t
+rtems_bsd_soo_readv(rtems_libio_t *iop, const struct iovec *iov,
+    int iovcnt, ssize_t total)
+{
+	struct thread *td = rtems_bsd_get_curthread_or_null();
+	struct uio auio = {
+		.uio_iov = __DECONST(struct iovec *, iov),
+		.uio_iovcnt = iovcnt,
+		.uio_offset = 0,
+		.uio_resid = total,
+		.uio_segflg = UIO_USERSPACE,
+		.uio_rw = UIO_READ,
+		.uio_td = td
+	};
+	int error;
+
+	if (td != NULL) {
+		error = soo_read(iop, &auio, NULL, 0, NULL);
+	} else {
+		error = ENOMEM;
+	}
+
+	if (error == 0) {
+		return (total - auio.uio_resid);
+	} else {
+		rtems_set_errno_and_return_minus_one(error);
+	}
+}
+#endif /* __rtems__ */
+
+#ifdef __rtems__
+int
+#else /* __rtems__ */
 static int
+#endif /* __rtems__ */
 soo_write(struct file *fp, struct uio *uio, struct ucred *active_cred,
     int flags, struct thread *td)
 {
@@ -147,14 +224,84 @@ soo_write(struct file *fp, struct uio *uio, struct ucred *active_cred,
 #endif
 	error = sosend(so, 0, uio, 0, 0, 0, uio->uio_td);
 	if (error == EPIPE && (so->so_options & SO_NOSIGPIPE) == 0) {
+#ifndef __rtems__
 		PROC_LOCK(uio->uio_td->td_proc);
 		tdsignal(uio->uio_td, SIGPIPE);
 		PROC_UNLOCK(uio->uio_td->td_proc);
+#else /* __rtems__ */
+		/* FIXME: Determine if we really want to use signals */
+#endif /* __rtems__ */
 	}
 	return (error);
 }
+#ifdef __rtems__
+static ssize_t
+rtems_bsd_soo_write(rtems_libio_t *iop, const void *buffer, size_t count)
+{
+	struct thread *td = rtems_bsd_get_curthread_or_null();
+	struct iovec iov = {
+		.iov_base = __DECONST(void *, buffer),
+		.iov_len = count
+	};
+	struct uio auio = {
+		.uio_iov = &iov,
+		.uio_iovcnt = 1,
+		.uio_offset = 0,
+		.uio_resid = count,
+		.uio_segflg = UIO_USERSPACE,
+		.uio_rw = UIO_WRITE,
+		.uio_td = td
+	};
+	int error;
 
+	if (td != NULL) {
+		error = soo_write(iop, &auio, NULL, 0, NULL);
+	} else {
+		error = ENOMEM;
+	}
+
+	if (error == 0) {
+		return (count - auio.uio_resid);
+	} else {
+		rtems_set_errno_and_return_minus_one(error);
+	}
+}
+
+static ssize_t
+rtems_bsd_soo_writev(rtems_libio_t *iop, const struct iovec *iov,
+    int iovcnt, ssize_t total)
+{
+	struct thread *td = rtems_bsd_get_curthread_or_null();
+	struct uio auio = {
+		.uio_iov = __DECONST(struct iovec *, iov),
+		.uio_iovcnt = iovcnt,
+		.uio_offset = 0,
+		.uio_resid = total,
+		.uio_segflg = UIO_USERSPACE,
+		.uio_rw = UIO_WRITE,
+		.uio_td = td
+	};
+	int error;
+
+	if (td != NULL) {
+		error = soo_write(iop, &auio, NULL, 0, NULL);
+	} else {
+		error = ENOMEM;
+	}
+
+	if (error == 0) {
+		return (total - auio.uio_resid);
+	} else {
+		rtems_set_errno_and_return_minus_one(error);
+	}
+}
+#endif /* __rtems__ */
+
+#ifdef __rtems__
+int
+#else /* __rtems__ */
 static int
+#endif /* __rtems__ */
 soo_ioctl(struct file *fp, u_long cmd, void *data, struct ucred *active_cred,
     struct thread *td)
 {
@@ -266,8 +413,28 @@ soo_ioctl(struct file *fp, u_long cmd, void *data, struct ucred *active_cred,
 	}
 	return (error);
 }
-
+#ifdef __rtems__
 static int
+rtems_bsd_soo_ioctl(rtems_libio_t *iop, ioctl_command_t request, void *buffer)
+{
+	struct thread *td = rtems_bsd_get_curthread_or_null();
+	int error;
+
+	if (td != NULL) {
+		error = soo_ioctl(iop, request, buffer, NULL, td);
+	} else {
+		error = ENOMEM;
+	}
+
+	return rtems_bsd_error_to_status_and_errno(error);
+}
+#endif /* __rtems__ */
+
+#ifdef __rtems__
+int
+#else /* __rtems__ */
+static int
+#endif /* __rtems__ */
 soo_poll(struct file *fp, int events, struct ucred *active_cred,
     struct thread *td)
 {
@@ -279,19 +446,47 @@ soo_poll(struct file *fp, int events, struct ucred *active_cred,
 	if (error)
 		return (error);
 #endif
+#ifndef __rtems__
 	return (sopoll(so, events, fp->f_cred, td));
+#else /* __rtems__ */
+	return (sopoll(so, events, NULL, td));
+#endif /* __rtems__ */
 }
-
+#ifdef __rtems__
 static int
+rtems_bsd_soo_poll(rtems_libio_t *iop, int events)
+{
+	struct thread *td = rtems_bsd_get_curthread_or_null();
+	int error;
+
+	if (td != NULL) {
+		error = soo_poll(iop, events, NULL, td);
+	} else {
+		error = ENOMEM;
+	}
+
+	return (error);
+}
+#endif /* __rtems__ */
+
+#ifndef __rtems__
+int
 soo_stat(struct file *fp, struct stat *ub, struct ucred *active_cred,
     struct thread *td)
 {
 	struct socket *so = fp->f_data;
+#else /* __rtems__ */
+static int
+soo_stat(struct socket *so, struct stat *ub)
+{
+#endif /* __rtems__ */
 #ifdef MAC
 	int error;
 #endif
 
+#ifndef __rtems__
 	bzero((caddr_t)ub, sizeof (*ub));
+#endif /* __rtems__ */
 	ub->st_mode = S_IFSOCK;
 #ifdef MAC
 	error = mac_socket_check_stat(active_cred, so);
@@ -318,10 +513,28 @@ soo_stat(struct file *fp, struct stat *ub, struct ucred *active_cred,
 			ub->st_mode |= S_IWUSR | S_IWGRP | S_IWOTH;
 		SOCKBUF_UNLOCK(sb);
 	}
+#ifndef __rtems__
 	ub->st_uid = so->so_cred->cr_uid;
 	ub->st_gid = so->so_cred->cr_gid;
+#else /* __rtems__ */
+	ub->st_uid = BSD_DEFAULT_UID;
+	ub->st_gid = BSD_DEFAULT_GID;
+#endif /* __rtems__ */
 	return (*so->so_proto->pr_usrreqs->pru_sense)(so, ub);
 }
+#ifdef __rtems__
+static int
+rtems_bsd_soo_stat(
+	const rtems_filesystem_location_info_t *loc,
+	struct stat *buf
+)
+{
+	struct socket *so = rtems_bsd_loc_to_f_data(loc);
+	int error = soo_stat(so, buf);
+
+	return rtems_bsd_error_to_status_and_errno(error);
+}
+#endif /* __rtems__ */
 
 /*
  * API socket close on file pointer.  We call soclose() to close the socket
@@ -329,14 +542,27 @@ soo_stat(struct file *fp, struct stat *ub, struct ucred *active_cred,
  * file reference but the actual socket will not go away until the socket's
  * ref count hits 0.
  */
+#ifdef __rtems__
+int
+#else /* __rtems__ */
 static int
+#endif /* __rtems__ */
 soo_close(struct file *fp, struct thread *td)
 {
 	int error = 0;
 	struct socket *so;
 
+#ifdef __rtems__
+	/* FIXME: Move this to the RTEMS close() function */
+	knote_fdclose(td, rtems_libio_iop_to_descriptor(fp));
+#endif /* __rtems__ */
+
 	so = fp->f_data;
+#ifndef __rtems__
 	fp->f_ops = &badfileops;
+#else /* __rtems__ */
+	fp->pathinfo.handlers = &rtems_filesystem_handlers_default;
+#endif /* __rtems__ */
 	fp->f_data = NULL;
 
 	if (so)
@@ -344,6 +570,7 @@ soo_close(struct file *fp, struct thread *td)
 	return (error);
 }
 
+#ifndef __rtems__
 static int
 soo_fill_kinfo(struct file *fp, struct kinfo_file *kif, struct filedesc *fdp)
 {
@@ -821,3 +1048,53 @@ soo_aio_queue(struct file *fp, struct kaiocb *job)
 	SOCKBUF_UNLOCK(sb);
 	return (0);
 }
+#endif /* __rtems__ */
+#ifdef __rtems__
+static int
+rtems_bsd_soo_open(rtems_libio_t *iop, const char *path, int oflag,
+    mode_t mode)
+{
+	return rtems_bsd_error_to_status_and_errno(ENXIO);
+}
+
+static int
+rtems_bsd_soo_close(rtems_libio_t *iop)
+{
+	int error = soo_close(iop, NULL);
+
+	return rtems_bsd_error_to_status_and_errno(error);
+}
+
+static int
+rtems_bsd_soo_fcntl(rtems_libio_t *iop, int cmd)
+{
+	int error = 0;
+
+	if (cmd == F_SETFL) {
+		int nbio = iop->flags & LIBIO_FLAGS_NO_DELAY;
+
+		error = soo_ioctl(iop, FIONBIO, &nbio, NULL, NULL);
+	}
+
+	return rtems_bsd_error_to_status_and_errno(error);
+}
+
+const rtems_filesystem_file_handlers_r socketops = {
+	.open_h = rtems_bsd_soo_open,
+	.close_h = rtems_bsd_soo_close,
+	.read_h = rtems_bsd_soo_read,
+	.write_h = rtems_bsd_soo_write,
+	.ioctl_h = rtems_bsd_soo_ioctl,
+	.lseek_h = rtems_filesystem_default_lseek,
+	.fstat_h = rtems_bsd_soo_stat,
+	.ftruncate_h = rtems_filesystem_default_ftruncate,
+	.fsync_h = rtems_filesystem_default_fsync_or_fdatasync,
+	.fdatasync_h = rtems_filesystem_default_fsync_or_fdatasync,
+	.fcntl_h = rtems_bsd_soo_fcntl,
+	.poll_h = rtems_bsd_soo_poll,
+	.kqfilter_h = soo_kqfilter,
+	.readv_h = rtems_bsd_soo_readv,
+	.writev_h = rtems_bsd_soo_writev,
+	.mmap_h = rtems_filesystem_default_mmap
+};
+#endif /* __rtems__ */

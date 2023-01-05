@@ -75,6 +75,13 @@
 
 #include <dev/usb/controller/saf1761_otg.h>
 #include <dev/usb/controller/saf1761_otg_reg.h>
+#ifdef __rtems__
+#include <rtems.h>
+#include <bsp.h>
+#ifdef LIBBSP_ARM_ATSAM_BSP_H
+#include <bsp/pin-config.h>
+#endif /* LIBBSP_ARM_ATSAM_BSP_H */
+#endif /* __rtems__ */
 
 static device_probe_t saf1761_otg_fdt_probe;
 static device_attach_t saf1761_otg_fdt_attach;
@@ -100,23 +107,45 @@ static driver_t saf1761_otg_driver = {
 
 static devclass_t saf1761_otg_devclass;
 
+#ifndef __rtems__
 DRIVER_MODULE(saf1761otg, simplebus, saf1761_otg_driver, saf1761_otg_devclass, 0, 0);
+#else /* __rtems__ */
+DRIVER_MODULE(saf1761otg, nexus, saf1761_otg_driver, saf1761_otg_devclass, 0, 0);
+#endif /* __rtems__ */
 MODULE_DEPEND(saf1761otg, usb, 1, 1, 1);
 
 static int
 saf1761_otg_fdt_probe(device_t dev)
 {
+#ifndef __rtems__
 	if (!ofw_bus_status_okay(dev))
 		return (ENXIO);
 
 	if (!ofw_bus_is_compatible(dev, "nxp,usb-isp1761"))
 		return (ENXIO);
+#else /* __rtems__ */
+	if (device_get_unit(dev) != 0)
+		return (ENXIO);
+#endif /* __rtems__ */
 
 	device_set_desc(dev, "ISP1761/SAF1761 DCI USB 2.0 Device Controller");
 
 	return (0);
 }
 
+#ifdef __rtems__
+static void
+saf1761_otg_filter_interrupt_wrapper(void *arg)
+{
+	struct saf1761_otg_softc *sc = arg;
+	int status;
+
+	status = saf1761_otg_filter_interrupt(sc);
+	if ((status & FILTER_SCHEDULE_THREAD) != 0) {
+		rtems_interrupt_server_request_submit(&sc->sc_irq_srv_req);
+	}
+}
+#endif /* __rtems__ */
 static int
 saf1761_otg_fdt_attach(device_t dev)
 {
@@ -124,7 +153,11 @@ saf1761_otg_fdt_attach(device_t dev)
 	char param[24];
 	int err;
 	int rid;
+#ifdef __rtems__
+	rtems_status_code status;
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 	/* get configuration from FDT */
 
 	/* get bus-width, if any */
@@ -169,6 +202,10 @@ saf1761_otg_fdt_attach(device_t dev)
 		sc->sc_interrupt_cfg |= SOTG_INTERRUPT_CFG_INTLVL;
 		sc->sc_hw_mode |= SOTG_HW_MODE_CTRL_INTR_LEVEL;
 	}
+#else /* __rtems__ */
+	/* set 16-bit data bus */
+	sc->sc_hw_mode = 0;
+#endif /* __rtems__ */
 
 	/* initialise some bus fields */
 	sc->sc_bus.parent = dev;
@@ -211,8 +248,29 @@ saf1761_otg_fdt_attach(device_t dev)
 
 	device_set_ivars(sc->sc_bus.bdev, &sc->sc_bus);
 
+#ifdef __rtems__
+#ifdef LIBBSP_ARM_ATSAM_BSP_H
+	const Pin saf_irq = {PIO_PC16, PIOC, ID_PIOC, PIO_INPUT, PIO_PULLUP | PIO_IT_LOW_LEVEL};
+	/* Activate pin interrupt. Add a default handler that just clears the
+	 * status. */
+	PIO_Configure(&saf_irq, 1);
+	PIO_EnableIt(&saf_irq);
+#endif /* LIBBSP_ARM_ATSAM_BSP_H */
+#endif /* __rtems__ */
+#ifndef __rtems__
 	err = bus_setup_intr(dev, sc->sc_irq_res, INTR_TYPE_TTY | INTR_MPSAFE,
 	    &saf1761_otg_filter_interrupt, &saf1761_otg_interrupt, sc, &sc->sc_intr_hdl);
+#else /* __rtems__ */
+	rtems_interrupt_server_request_initialize(
+	    RTEMS_INTERRUPT_SERVER_DEFAULT, &sc->sc_irq_srv_req,
+	    saf1761_otg_interrupt, sc);
+	rtems_interrupt_server_request_set_vector(&sc->sc_irq_srv_req,
+	    rman_get_start(sc->sc_irq_res));
+	status = rtems_interrupt_handler_install(
+	    rman_get_start(sc->sc_irq_res), device_get_nameunit(dev),
+	    RTEMS_INTERRUPT_SHARED, saf1761_otg_filter_interrupt_wrapper, sc);
+	err = (status == RTEMS_SUCCESSFUL) ? 0 : EINVAL;
+#endif /* __rtems__ */
 	if (err) {
 		sc->sc_intr_hdl = NULL;
 		goto error;

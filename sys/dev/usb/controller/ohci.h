@@ -34,6 +34,11 @@
 #ifndef _OHCI_H_
 #define	_OHCI_H_
 
+#ifdef __rtems__
+#ifdef BSP_USB_OTG_TRANSCEIVER_I2C_ADDR
+#include <dev/usb/usb_otg_transceiver.h>
+#endif
+#endif /* __rtems__ */
 #define	OHCI_MAX_DEVICES MIN(USB_MAX_DEVICES, 128)
 
 #define	OHCI_NO_INTRS		32
@@ -253,6 +258,12 @@ typedef struct ohci_softc {
 	uint8_t	sc_hub_idata[32];
 
 	char	sc_vendor[16];
+#ifdef __rtems__
+	int sc_init_done;
+#ifdef BSP_USB_OTG_TRANSCEIVER_I2C_ADDR
+	struct usb_otg_transceiver sc_otg_trans;
+#endif /* BSP_USB_OTG_TRANSCEIVER_I2C_ADDR */
+#endif /* __rtems__ */
 
 } ohci_softc_t;
 

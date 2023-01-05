@@ -67,8 +67,10 @@ struct lock_class *lock_classes[LOCK_CLASS_MAX + 1] = {
 	&lock_class_mtx_spin,
 	&lock_class_mtx_sleep,
 	&lock_class_sx,
+#ifndef __rtems__
 	&lock_class_rm,
 	&lock_class_rm_sleepable,
+#endif /* __rtems__ */
 	&lock_class_rw,
 	&lock_class_lockmgr,
 };
@@ -80,8 +82,10 @@ lock_init(struct lock_object *lock, struct lock_class *class, const char *name,
 	int i;
 
 	/* Check for double-init and zero object. */
+#ifndef __rtems__
 	KASSERT(flags & LO_NEW || !lock_initialized(lock),
 	    ("lock \"%s\" %p already initialized", name, lock));
+#endif /* __rtems__ */
 
 	/* Look up lock class to find its index. */
 	for (i = 0; i < LOCK_CLASS_MAX; i++)
@@ -92,7 +96,9 @@ lock_init(struct lock_object *lock, struct lock_class *class, const char *name,
 	KASSERT(i < LOCK_CLASS_MAX, ("unknown lock class %p", class));
 
 	/* Initialize the lock object. */
+#ifndef __rtems__
 	lock->lo_name = name;
+#endif /* __rtems__ */
 	lock->lo_flags |= flags | LO_INITIALIZED;
 	LOCK_LOG_INIT(lock, 0);
 	WITNESS_INIT(lock, (type != NULL) ? type : name);
@@ -102,12 +108,17 @@ void
 lock_destroy(struct lock_object *lock)
 {
 
+#ifndef __rtems__
 	KASSERT(lock_initialized(lock), ("lock %p is not initialized", lock));
+#else /* __rtems__ */
+	BSD_ASSERT(lock_initialized(lock));
+#endif /* __rtems__ */
 	WITNESS_DESTROY(lock);
 	LOCK_LOG_DESTROY(lock, 0);
 	lock->lo_flags &= ~LO_INITIALIZED;
 }
 
+#ifndef __rtems__
 static SYSCTL_NODE(_debug, OID_AUTO, lock, CTLFLAG_RD, NULL, "lock debugging");
 static SYSCTL_NODE(_debug_lock, OID_AUTO, delay, CTLFLAG_RD, NULL,
     "lock delay");
@@ -161,6 +172,7 @@ lock_delay_default_init(struct lock_delay_config *lc)
 	if (lc->max > 32678)
 		lc->max = 32678;
 }
+#endif /* __rtems__ */
 
 #ifdef DDB
 DB_SHOW_COMMAND(lock, db_show_lock)

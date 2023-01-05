@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright 2009 Bert Vermeulen <bert@biot.com>
  *
@@ -174,3 +178,6 @@ usb_linux_64_byte_print(netdissect_options *ndo, const struct pcap_pkthdr *h,
 
 #endif /* defined(HAVE_PCAP_USB_H) && defined(DLT_USB_LINUX) */
 
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-usb-data.h"
+#endif /* __rtems__ */

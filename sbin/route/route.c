@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-route-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -44,6 +48,12 @@ static char sccsid[] = "@(#)route.c	8.6 (Berkeley) 4/28/95";
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#ifdef __rtems__
+#define __need_getopt_newlib
+#include <getopt.h>
+#include <machine/rtems-bsd-program.h>
+#include <machine/rtems-bsd-commands.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/file.h>
 #include <sys/socket.h>
@@ -73,6 +83,9 @@ __FBSDID("$FreeBSD$");
 #include <time.h>
 #include <unistd.h>
 #include <ifaddrs.h>
+#ifdef __rtems__
+#include "rtems-bsd-route-route-data.h"
+#endif /* __rtems__ */
 
 struct fibl {
 	TAILQ_ENTRY(fibl)	fl_next;
@@ -107,7 +120,11 @@ static int	rtm_seq;
 static char	rt_line[NI_MAXHOST];
 static char	net_line[MAXHOSTNAMELEN + 1];
 
+#ifndef __rtems__
 static struct {
+#else /* __rtems__ */
+static struct m_rtmsg {
+#endif /* __rtems__ */
 	struct	rt_msghdr m_rtm;
 	char	m_space[512];
 } m_rtmsg;
@@ -147,6 +164,7 @@ static int	fiboptlist_range(const char *, struct fibl_head_t *);
 
 static void usage(const char *) __dead2;
 
+#ifndef __rtems__
 #define	READ_TIMEOUT	10
 static volatile sig_atomic_t stop_read;
 
@@ -156,6 +174,9 @@ stopit(int sig __unused)
 
 	stop_read = 1;
 }
+#else /* __rtems__ */
+#define	stop_read 0
+#endif /* __rtems__ */
 
 static void
 usage(const char *cp)
@@ -166,11 +187,43 @@ usage(const char *cp)
 	/* NOTREACHED */
 }
 
+#ifdef __rtems__
+static int main(int argc, char *argv[]);
+
+RTEMS_LINKER_RWSET(bsd_prog_route, char);
+
+int
+rtems_bsd_command_route(int argc, char *argv[])
+{
+	int exit_code;
+	void *data_begin;
+	size_t data_size;
+
+	data_begin = RTEMS_LINKER_SET_BEGIN(bsd_prog_route);
+	data_size = RTEMS_LINKER_SET_SIZE(bsd_prog_route);
+
+	rtems_bsd_program_lock();
+	exit_code = rtems_bsd_program_call_main_with_data_restore("route",
+	    main, argc, argv, data_begin, data_size);
+	rtems_bsd_program_unlock();
+
+	return exit_code;
+}
+#endif /* __rtems__ */
 int
 main(int argc, char **argv)
 {
 	int ch;
 	size_t len;
+#ifdef __rtems__
+	struct getopt_data getopt_data;
+	memset(&getopt_data, 0, sizeof(getopt_data));
+#define optind getopt_data.optind
+#define optarg getopt_data.optarg
+#define opterr getopt_data.opterr
+#define optopt getopt_data.optopt
+#define getopt(argc, argv, opt) getopt_r(argc, argv, "+" opt, &getopt_data)
+#endif /* __rtems__ */
 
 	if (argc < 2)
 		usage(NULL);
@@ -790,7 +843,9 @@ set_metric(char *value, int key)
 static void
 newroute(int argc, char **argv)
 {
+#ifndef __rtems__
 	struct sigaction sa;
+#endif /* __rtems__ */
 	struct hostent *hp;
 	struct fibl *fl;
 	char *cmd;
@@ -806,11 +861,13 @@ newroute(int argc, char **argv)
 	hp = NULL;
 	TAILQ_INIT(&fibl_head);
 
+#ifndef __rtems__
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
 	sa.sa_handler = stopit;
 	if (sigaction(SIGALRM, &sa, 0) == -1)
 		warn("sigaction SIGALRM");
+#endif /* __rtems__ */
 
 	cmd = argv[0];
 	if (*cmd != 'g' && *cmd != 's')
@@ -1564,18 +1621,22 @@ rtmsg(int cmd, int flags, int fib)
 		return (-1);
 	}
 	if (cmd == RTM_GET) {
+#ifndef __rtems__
 		stop_read = 0;
 		alarm(READ_TIMEOUT);
+#endif /* __rtems__ */
 		do {
 			l = read(s, (char *)&m_rtmsg, sizeof(m_rtmsg));
 		} while (l > 0 && stop_read == 0 &&
 		    (rtm.rtm_type != RTM_GET || rtm.rtm_seq != rtm_seq ||
 			rtm.rtm_pid != pid));
+#ifndef __rtems__
 		if (stop_read != 0) {
 			warnx("read from routing socket timed out");
 			return (-1);
 		} else
 			alarm(0);
+#endif /* __rtems__ */
 		if (l < 0)
 			warn("read from routing socket");
 		else

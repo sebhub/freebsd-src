@@ -91,7 +91,11 @@ fgetln(FILE *fp, size_t *lenp)
 	size_t len;
 	size_t off;
 
+#ifndef __rtems__
 	FLOCKFILE_CANCELSAFE(fp);
+#else /* __rtems__ */
+	FLOCKFILE(fp);
+#endif /* __rtems__ */
 	ORIENT(fp, -1);
 	/* make sure there is input */
 	if (fp->_r <= 0 && __srefill(fp)) {
@@ -110,7 +114,9 @@ fgetln(FILE *fp, size_t *lenp)
 		p++;		/* advance over it */
 		ret = (char *)fp->_p;
 		*lenp = len = p - fp->_p;
+#ifndef __rtems__
 		fp->_flags |= __SMOD;
+#endif /* __rtems__ */
 		fp->_r -= len;
 		fp->_p = p;
 		goto end;
@@ -165,7 +171,11 @@ fgetln(FILE *fp, size_t *lenp)
 #endif
 	ret = (char *)fp->_lb._base;
 end:
+#ifndef __rtems__
 	FUNLOCKFILE_CANCELSAFE();
+#else /* __rtems__ */
+	FUNLOCKFILE(fp);
+#endif /* __rtems__ */
 	return (ret);
 
 error:

@@ -165,6 +165,7 @@ extern cpuset_t hlt_cpus_mask;		/* XXX 'mask' is detail in old impl */
 extern cpuset_t logical_cpus_mask;
 #endif /* SMP */
 
+#ifndef __rtems__
 extern u_int mp_maxid;
 extern int mp_maxcpus;
 extern int mp_ncores;
@@ -174,13 +175,23 @@ extern int smp_threads_per_core;
 
 extern cpuset_t all_cpus;
 extern cpuset_t cpuset_domain[MAXMEMDOM]; 	/* CPUs in each NUMA domain. */
+#else /* __rtems__ */
+#define mp_maxid 0U
+#define mp_maxcpus 1
+#define mp_ncpus 1
+#define all_cpus 1U
+#endif /* __rtems__ */
 
 /*
  * Macro allowing us to determine whether a CPU is absent at any given
  * time, thus permitting us to configure sparse maps of cpuid-dependent
  * (per-CPU) structures.
  */
+#ifndef __rtems__
 #define	CPU_ABSENT(x_cpu)	(!CPU_ISSET(x_cpu, &all_cpus))
+#else /* __rtems__ */
+#define	CPU_ABSENT(x_cpu) 0
+#endif /* __rtems__ */
 
 /*
  * Macros to iterate over non-absent CPUs.  CPU_FOREACH() takes an

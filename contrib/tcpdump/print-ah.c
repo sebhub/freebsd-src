@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*	$NetBSD: print-ah.c,v 1.4 1996/05/20 00:41:16 fvdl Exp $	*/
 
 /*
@@ -62,3 +66,6 @@ ah_print(netdissect_options *ndo, register const u_char *bp)
 	ND_PRINT((ndo, "[|AH]"));
 	return -1;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-ah-data.h"
+#endif /* __rtems__ */

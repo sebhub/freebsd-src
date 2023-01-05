@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that: (1) source code
@@ -39,3 +43,6 @@ const struct tok nlpid_values[] = {
     { NLPID_IP6, "IPv6" },
     { 0, NULL }
 };
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-nlpid-data.h"
+#endif /* __rtems__ */

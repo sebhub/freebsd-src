@@ -17,7 +17,7 @@
 #endif /* __linux__ */
 
 #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__DragonFly__) || \
-    defined(__OpenBSD__)
+    defined(__OpenBSD__) || defined(__rtems__)
 #include <sys/types.h>
 #include <sys/endian.h>
 #define __BYTE_ORDER	_BYTE_ORDER
@@ -33,7 +33,8 @@
 #define bswap_64 bswap64
 #endif /* __OpenBSD__ */
 #endif /* defined(__FreeBSD__) || defined(__NetBSD__) ||
-	* defined(__DragonFly__) || defined(__OpenBSD__) */
+	* defined(__DragonFly__) || defined(__OpenBSD__) ||
+	* defined(__rtems__) */
 
 #ifdef __APPLE__
 #include <sys/types.h>
@@ -52,15 +53,6 @@ static inline unsigned int bswap_32(unsigned int v)
 		((v & 0xff0000) >> 8) | (v >> 24);
 }
 #endif /* __APPLE__ */
-
-#ifdef __rtems__
-#include <rtems/endian.h>
-#define __BYTE_ORDER BYTE_ORDER
-#define __LITTLE_ENDIAN LITTLE_ENDIAN
-#define __BIG_ENDIAN BIG_ENDIAN
-#define bswap_16 CPU_swap_u16
-#define bswap_32 CPU_swap_u32
-#endif /* __rtems__ */
 
 #ifdef CONFIG_NATIVE_WINDOWS
 #include <winsock.h>

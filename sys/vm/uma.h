@@ -281,10 +281,12 @@ uma_zone_t uma_zcache_create(char *name, int size, uma_ctor ctor, uma_dtor dtor,
 #define	UMA_ZONE_PCPU		0x8000	/*
 					 * Allocates mp_maxid + 1 slabs of PAGE_SIZE
 					 */
+#ifndef __rtems__
 #define	UMA_ZONE_NUMA		0x10000	/*
 					 * NUMA aware Zone.  Implements a best
 					 * effort first-touch policy.
 					 */
+#endif /* __rtems__ */
 #define	UMA_ZONE_NOBUCKETCACHE	0x20000	/*
 					 * Don't cache full buckets.  Limit
 					 * UMA to per-cpu state.
@@ -615,12 +617,16 @@ void uma_zone_set_freef(uma_zone_t zone, uma_free freef);
 /*
  * These flags are setable in the allocf and visible in the freef.
  */
+#ifndef __rtems__
 #define UMA_SLAB_BOOT	0x01		/* Slab alloced from boot pages */
+#endif /* __rtems__ */
 #define UMA_SLAB_KERNEL	0x04		/* Slab alloced from kmem */
+#ifndef __rtems__
 #define UMA_SLAB_PRIV	0x08		/* Slab alloced from priv allocator */
 #define UMA_SLAB_OFFP	0x10		/* Slab is managed separately  */
 #define UMA_SLAB_MALLOC	0x20		/* Slab is a large malloc slab */
 /* 0x02, 0x40, and 0x80 are available */
+#endif /* __rtems__ */
 
 /*
  * Used to pre-fill a zone with some number of items
@@ -713,4 +719,7 @@ unsigned long uma_size(void);
 /* Return the amount of memory remaining.  May be negative. */
 long uma_avail(void);
 
+#ifdef __rtems__
+void rtems_uma_drain_timeout(void);
+#endif /* __rtems__ */
 #endif	/* _VM_UMA_H_ */

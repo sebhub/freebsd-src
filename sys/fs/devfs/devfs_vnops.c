@@ -65,6 +65,7 @@
 #include <sys/time.h>
 #include <sys/ttycom.h>
 #include <sys/unistd.h>
+#ifndef __rtems__
 #include <sys/vnode.h>
 
 static struct vop_vector devfs_vnodeops;
@@ -72,23 +73,29 @@ static struct vop_vector devfs_specops;
 static struct fileops devfs_ops_f;
 
 #include <fs/devfs/devfs.h>
+#endif /* __rtems__ */
 #include <fs/devfs/devfs_int.h>
 
+#ifndef __rtems__
 #include <security/mac/mac_framework.h>
 
 #include <vm/vm.h>
 #include <vm/vm_extern.h>
 #include <vm/vm_object.h>
+#endif /* __rtems__ */
 
 static MALLOC_DEFINE(M_CDEVPDATA, "DEVFSP", "Metainfo for cdev-fp data");
 
+#ifndef __rtems__
 struct mtx	devfs_de_interlock;
 MTX_SYSINIT(devfs_de_interlock, &devfs_de_interlock, "devfs interlock", MTX_DEF);
 struct sx	clone_drain_lock;
 SX_SYSINIT(clone_drain_lock, &clone_drain_lock, "clone events drain lock");
+#endif /* __rtems__ */
 struct mtx	cdevpriv_mtx;
 MTX_SYSINIT(cdevpriv_mtx, &cdevpriv_mtx, "cdevpriv lock", MTX_DEF);
 
+#ifndef __rtems__
 SYSCTL_DECL(_vfs_devfs);
 
 static int devfs_dotimes;
@@ -133,6 +140,7 @@ devfs_fp_check(struct file *fp, struct cdev **devp, struct cdevsw **dswp,
 	curthread->td_fpop = fp;
 	return (0);
 }
+#endif /* __rtems__ */
 
 int
 devfs_get_cdevpriv(void **datap)
@@ -197,8 +205,14 @@ devfs_destroy_cdevpriv(struct cdev_privdata *p)
 	free(p, M_CDEVPDATA);
 }
 
+#ifndef __rtems__
 static void
 devfs_fpdrop(struct file *fp)
+#else /* __rtems__ */
+#define	f_cdevpriv data1
+void
+devfs_fpdrop(rtems_libio_t *fp)
+#endif /* __rtems__ */
 {
 	struct cdev_privdata *p;
 
@@ -221,6 +235,7 @@ devfs_clear_cdevpriv(void)
 	devfs_fpdrop(fp);
 }
 
+#ifndef __rtems__
 /*
  * On success devfs_populate_vp() returns with dmp->dm_lock held.
  */
@@ -1318,7 +1333,7 @@ devfs_readdir(struct vop_readdir_args *ap)
 	 * supporting cookies. We store the location of the ncookies pointer
 	 * in a temporary variable before calling vfs_subr.c:vfs_read_dirent()
 	 * and set the number of cookies to 0. We then set the pointer to
-	 * NULL so that vfs_read_dirent doesn't try to call realloc() on 
+	 * NULL so that vfs_read_dirent doesn't try to call realloc() on
 	 * ap->a_cookies. Later in this function, we restore the ap->a_ncookies
 	 * pointer to its original location before returning to the caller.
 	 */
@@ -1483,7 +1498,7 @@ devfs_revoke(struct vop_revoke_args *ap)
 
 	dev = vp->v_rdev;
 	cdp = cdev2priv(dev);
- 
+
 	dev_lock();
 	cdp->cdp_inuse++;
 	dev_unlock();
@@ -1516,7 +1531,7 @@ devfs_revoke(struct vop_revoke_args *ap)
 				vdrop(vp2);
 				vput(vp2);
 				break;
-			} 
+			}
 		}
 		if (vp2 != NULL) {
 			continue;
@@ -1953,7 +1968,7 @@ static struct vop_vector devfs_specops = {
 
 /*
  * Our calling convention to the device drivers used to be that we passed
- * vnode.h IO_* flags to read()/write(), but we're moving to fcntl.h O_ 
+ * vnode.h IO_* flags to read()/write(), but we're moving to fcntl.h O_
  * flags instead since that's what open(), close() and ioctl() takes and
  * we don't really want vnode.h in device drivers.
  * We solved the source compatibility by redefining some vnode flags to
@@ -1963,3 +1978,4 @@ static struct vop_vector devfs_specops = {
  */
 CTASSERT(O_NONBLOCK == IO_NDELAY);
 CTASSERT(O_FSYNC == IO_SYNC);
+#endif /* __rtems__ */

@@ -52,9 +52,16 @@ struct snapdata;
 struct devfs_dirent;
 struct cdevsw;
 struct file;
+#ifdef __rtems__
+struct ucred;
+#define RTEMS_CDEV_DIRECTORY "/dev/"
+extern const char rtems_cdev_directory[sizeof(RTEMS_CDEV_DIRECTORY)];
+#endif /* __rtems__ */
 
 struct cdev {
+#ifndef __rtems__
 	void		*si_spare0;
+#endif /* __rtems__ */
 	u_int		si_flags;
 #define	SI_ETERNAL	0x0001	/* never destroyed */
 #define	SI_ALIAS	0x0002	/* carrier of alias name */
@@ -65,6 +72,7 @@ struct cdev {
 #define	SI_CLONELIST	0x0200	/* on a clone list */
 #define	SI_UNMAPPED	0x0400	/* can handle unmapped I/O */
 #define	SI_NOSPLIT	0x0800	/* I/O should not be split up */
+#ifndef __rtems__
 	struct timespec	si_atime;
 	struct timespec	si_ctime;
 	struct timespec	si_mtime;
@@ -72,10 +80,13 @@ struct cdev {
 	gid_t		si_gid;
 	mode_t		si_mode;
 	struct ucred	*si_cred;	/* cached clone-time credential */
+#endif /* __rtems__ */
 	int		si_drv0;
 	int		si_refcount;
 	LIST_ENTRY(cdev)	si_list;
+#ifndef __rtems__
 	LIST_ENTRY(cdev)	si_clone;
+#endif /* __rtems__ */
 	LIST_HEAD(, cdev)	si_children;
 	LIST_ENTRY(cdev)	si_siblings;
 	struct cdev *si_parent;
@@ -85,9 +96,14 @@ struct cdev {
 	int		si_iosize_max;	/* maximum I/O size (for physio &al) */
 	u_long		si_usecount;
 	u_long		si_threadcount;
+#ifndef __rtems__
 	union {
 		struct snapdata *__sid_snapdata;
 	} __si_u;
+#endif /* __rtems__ */
+#ifdef __rtems__
+	char		si_path[sizeof(RTEMS_CDEV_DIRECTORY) - 1];
+#endif /* __rtems__ */
 	char		si_name[SPECNAMELEN + 1];
 };
 
@@ -181,25 +197,33 @@ struct cdevsw {
 	u_int			d_flags;
 	const char		*d_name;
 	d_open_t		*d_open;
+#ifndef __rtems__
 	d_fdopen_t		*d_fdopen;
+#endif /* __rtems__ */
 	d_close_t		*d_close;
 	d_read_t		*d_read;
 	d_write_t		*d_write;
 	d_ioctl_t		*d_ioctl;
 	d_poll_t		*d_poll;
+#ifndef __rtems__
 	d_mmap_t		*d_mmap;
 	d_strategy_t		*d_strategy;
 	dumper_t		*d_dump;
+#endif /* __rtems__ */
 	d_kqfilter_t		*d_kqfilter;
+#ifndef __rtems__
 	d_purge_t		*d_purge;
 	d_mmap_single_t		*d_mmap_single;
 
 	int32_t			d_spare0[3];
 	void			*d_spare1[3];
 
+#endif /* __rtems__ */
 	/* These fields should not be messed with by drivers */
 	LIST_HEAD(, cdev)	d_devs;
+#ifndef __rtems__
 	int			d_spare2;
+#endif /* __rtems__ */
 	union {
 		struct cdevsw		*gianttrick;
 		SLIST_ENTRY(cdevsw)	postfree_list;
@@ -353,7 +377,11 @@ struct dumperinfo {
 	struct kerneldumpcomp *kdcomp; /* Kernel dump compression. */
 };
 
+#ifndef __rtems__
 extern int dumping;		/* system is dumping */
+#else /* __rtems__ */
+#define	dumping 0
+#endif /* __rtems__ */
 
 int doadump(boolean_t);
 int set_dumper(struct dumperinfo *di, const char *devname, struct thread *td,

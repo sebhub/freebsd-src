@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-netstat-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -35,10 +39,16 @@ static char sccsid[] = "From: @(#)route.c	8.6 (Berkeley) 4/28/95";
 #endif /* not lint */
 #endif
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
+#ifdef __rtems__
+#include <rtems/rtems/clock.h>
+#endif /* __rtems__ */
 #include <sys/protosw.h>
 #include <sys/socket.h>
 #include <sys/socketvar.h>
@@ -52,7 +62,9 @@ __FBSDID("$FreeBSD$");
 #include <net/route.h>
 
 #include <netinet/in.h>
+#ifndef __rtems__
 #include <netgraph/ng_socket.h>
+#endif /* __rtems__ */
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>
@@ -70,11 +82,18 @@ __FBSDID("$FreeBSD$");
 #include <libxo/xo.h>
 #include "netstat.h"
 #include "nl_defs.h"
+#ifdef __rtems__
+#include "rtems-bsd-netstat-route-data.h"
+#endif /* __rtems__ */
 
 /*
  * Definitions for showing gateway flags.
  */
+#ifndef __rtems__
 static struct bits {
+#else /* __rtems__ */
+static const struct bits {
+#endif /* __rtems__ */
 	u_long	b_mask;
 	char	b_val;
 	const char *b_name;
@@ -146,8 +165,12 @@ routepr(int fibnum, int af)
 	 * (time_uptime vs time_second) and we are reading kernel memory
 	 * directly we should do rt_expire --> expire_time conversion.
 	 */
+#ifndef __rtems__
 	if (clock_gettime(CLOCK_UPTIME, &uptime) < 0)
 		err(EX_OSERR, "clock_gettime() failed");
+#else /* __rtems__ */
+	rtems_clock_get_uptime(&uptime);
+#endif /* __rtems__ */
 
 	xo_open_container("route-information");
 	xo_emit("{T:Routing tables}");
@@ -473,9 +496,14 @@ fmt_sockaddr(struct sockaddr *sa, struct sockaddr *mask, int flags)
 		break;
 	case AF_NETGRAPH:
 	    {
+#ifdef __rtems__
+		/* netgraph not supported yet */
+		err(EX_OSERR, "memory allocation failed");
+#else /* __rtems__ */
 		strlcpy(buf, ((struct sockaddr_ng *)sa)->sg_data,
 		    sizeof(buf));
 		cp = buf;
+#endif /* __rtems__ */
 		break;
 	    }
 	case AF_LINK:
@@ -519,7 +547,11 @@ fmt_sockaddr(struct sockaddr *sa, struct sockaddr *mask, int flags)
 static void
 p_flags(int f, const char *format)
 {
+#ifndef __rtems__
 	struct bits *p;
+#else /* __rtems__ */
+	const struct bits *p;
+#endif /* __rtems__ */
 
 	xo_emit(format, fmt_flags(f));
 
@@ -535,7 +567,11 @@ fmt_flags(int f)
 {
 	static char name[33];
 	char *flags;
+#ifndef __rtems__
 	struct bits *p = bits;
+#else /* __rtems__ */
+	const struct bits *p = bits;
+#endif /* __rtems__ */
 
 	for (flags = name; p->b_mask; p++)
 		if (p->b_mask & f)

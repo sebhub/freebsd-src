@@ -71,6 +71,7 @@ nvme_init(void)
 
 SYSINIT(nvme_register, SI_SUB_DRIVERS, SI_ORDER_SECOND, nvme_init, NULL);
 
+#ifndef __rtems__
 static void
 nvme_uninit(void)
 {
@@ -78,6 +79,7 @@ nvme_uninit(void)
 }
 
 SYSUNINIT(nvme_unregister, SI_SUB_DRIVERS, SI_ORDER_SECOND, nvme_uninit, NULL);
+#endif /* __rtems__ */
 
 int
 nvme_shutdown(device_t dev)

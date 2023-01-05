@@ -48,9 +48,11 @@
 #define	CALLOUT_MPSAFE		0x0008 /* deprecated */
 #define	CALLOUT_RETURNUNLOCKED	0x0010 /* handler returns with mtx unlocked */
 #define	CALLOUT_SHAREDLOCK	0x0020 /* callout lock held in shared mode */
+#ifndef __rtems__
 #define	CALLOUT_DFRMIGRATION	0x0040 /* callout in deferred migration mode */
 #define	CALLOUT_PROCESSED	0x0080 /* callout in wheel or processing list? */
 #define	CALLOUT_DIRECT 		0x0100 /* allow exec from hw int context */
+#endif /* __rtems__ */
 
 #define	C_DIRECT_EXEC		0x0001 /* direct execution of callout */
 #define	C_PRELBITS		7
@@ -110,9 +112,15 @@ int	callout_reset_sbt_on(struct callout *, sbintime_t, sbintime_t,
 #define	callout_reset_sbt_curcpu(c, sbt, pr, fn, arg, flags)		\
     callout_reset_sbt_on((c), (sbt), (pr), (fn), (arg), PCPU_GET(cpuid),\
         (flags))
+#ifndef __rtems__
 #define	callout_reset_on(c, to_ticks, fn, arg, cpu)			\
     callout_reset_sbt_on((c), tick_sbt * (to_ticks), 0, (fn), (arg),	\
         (cpu), C_HARDCLOCK)
+#else /* __rtems__ */
+#define	callout_reset_on(c, to_ticks, fn, arg, cpu)			\
+    callout_reset_sbt_on((c), tick_sbt * (to_ticks), 0, (fn), (arg),	\
+        -1, C_HARDCLOCK)
+#endif /* __rtems__ */
 #define	callout_reset(c, on_tick, fn, arg)				\
     callout_reset_on((c), (on_tick), (fn), (arg), -1)
 #define	callout_reset_curcpu(c, on_tick, fn, arg)			\

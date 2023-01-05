@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1997 Yen Yen Lim and North Dakota State University
  * All rights reserved.
@@ -106,3 +110,6 @@ sunatm_if_print(netdissect_options *ndo,
 
 	return (PKT_BEGIN_POS);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-sunatm-data.h"
+#endif /* __rtems__ */

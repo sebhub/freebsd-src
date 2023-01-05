@@ -123,6 +123,7 @@ done:
 	return (error);
 }
 
+#ifndef __rtems__
 /*
  * Sysctl handler to display the list of available CC algorithms.
  */
@@ -174,6 +175,7 @@ cc_list_available(SYSCTL_HANDLER_ARGS)
 	sbuf_delete(s);
 	return (err);
 }
+#endif /* __rtems__ */
 
 /*
  * Reset the default CC algo to NewReno for any netstack which is using the algo
@@ -324,9 +326,11 @@ SYSCTL_PROC(_net_inet_tcp_cc, OID_AUTO, algorithm,
     CTLFLAG_VNET | CTLTYPE_STRING | CTLFLAG_RW,
     NULL, 0, cc_default_algo, "A", "Default congestion control algorithm");
 
+#ifndef __rtems__
 SYSCTL_PROC(_net_inet_tcp_cc, OID_AUTO, available, CTLTYPE_STRING|CTLFLAG_RD,
     NULL, 0, cc_list_available, "A",
     "List available congestion control algorithms");
+#endif /* __rtems__ */
 
 VNET_DEFINE(int, cc_do_abe) = 0;
 SYSCTL_INT(_net_inet_tcp_cc, OID_AUTO, abe, CTLFLAG_VNET | CTLFLAG_RW,

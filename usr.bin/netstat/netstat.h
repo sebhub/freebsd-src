@@ -157,3 +157,6 @@ void	unixpr(u_long, u_long, u_long, u_long, u_long, bool *);
 void	mroutepr(void);
 void	mrt_stats(void);
 void	bpf_stats(char *);
+#ifdef __rtems__
+#include <nlist.h> /* necessary for global "nl" variable */
+#endif /* __rtems__ */

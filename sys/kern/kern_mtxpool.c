@@ -82,7 +82,9 @@ struct mtx_pool {
 #define mtx_pool_shift	mtx_pool_header.mtxpool_shift
 #define mtx_pool_next	mtx_pool_header.mtxpool_next
 
+#ifndef __rtems__
 struct mtx_pool __read_frequently *mtxpool_sleep;
+#endif /* __rtems__ */
 
 #if UINTPTR_MAX == UINT64_MAX	/* 64 bits */
 # define POINTER_BITS		64
@@ -158,12 +160,14 @@ mtx_pool_destroy(struct mtx_pool **poolp)
 	*poolp = NULL;
 }
 
+#ifndef __rtems__
 static void
 mtx_pool_setup_dynamic(void *dummy __unused)
 {
 	mtxpool_sleep = mtx_pool_create("sleep mtxpool",
 	    MTX_POOL_SLEEP_SIZE, MTX_DEF);
 }
+#endif /* __rtems__ */
 
 /*
  * Obtain a (shared) mutex from the pool.  The returned mutex is a leaf
@@ -186,5 +190,7 @@ mtx_pool_alloc(struct mtx_pool *pool)
 	return (&pool->mtx_pool_ary[i]);
 }
 
+#ifndef __rtems__
 SYSINIT(mtxpooli2, SI_SUB_MTX_POOL_DYNAMIC, SI_ORDER_FIRST,
     mtx_pool_setup_dynamic, NULL);
+#endif /* __rtems__ */

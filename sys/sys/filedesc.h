@@ -77,20 +77,26 @@ struct fdescenttbl {
 #define NDSLOTTYPE	u_long
 
 struct filedesc {
+#ifndef __rtems__
 	struct	fdescenttbl *fd_files;	/* open files table */
+#endif /* __rtems__ */
 	struct	vnode *fd_cdir;		/* current directory */
 	struct	vnode *fd_rdir;		/* root directory */
+#ifndef __rtems__
 	struct	vnode *fd_jdir;		/* jail root directory */
 	NDSLOTTYPE *fd_map;		/* bitmap of free fds */
 	int	fd_lastfile;		/* high-water mark of fd_ofiles */
 	int	fd_freefile;		/* approx. next free file */
+#endif /* __rtems__ */
 	u_short	fd_cmask;		/* mask for file creation */
+#ifndef __rtems__
 	int	fd_refcnt;		/* thread reference count */
 	int	fd_holdcnt;		/* hold count on structure + mutex */
 	struct	sx fd_sx;		/* protects members of this struct */
 	struct	kqlist fd_kqlist;	/* list of kqueues on this filedesc */
 	int	fd_holdleaderscount;	/* block fdfree() for shared close() */
 	int	fd_holdleaderswakeup;	/* fdfree() needs wakeup */
+#endif /* __rtems__ */
 };
 
 /*
@@ -102,6 +108,7 @@ struct filedesc {
  *
  * fdl_refcount and fdl_holdcount are protected by struct filedesc mtx.
  */
+#ifndef __rtems__
 struct filedesc_to_leader {
 	int		fdl_refcount;	/* references from struct proc */
 	int		fdl_holdcount;	/* temporary hold during closef */
@@ -113,6 +120,9 @@ struct filedesc_to_leader {
 };
 #define	fd_nfiles	fd_files->fdt_nfiles
 #define	fd_ofiles	fd_files->fdt_ofiles
+#else /* __rtems__ */
+struct filedesc_to_leader;
+#endif /* __rtems__ */
 
 /*
  * Per-process open flags.
@@ -120,15 +130,26 @@ struct filedesc_to_leader {
 #define	UF_EXCLOSE	0x01		/* auto-close on exec */
 
 #ifdef _KERNEL
+#ifdef __rtems__
+#include <sys/file.h>
+#include <rtems/libio_.h>
+#endif /* __rtems__ */
 
 /* Lock a file descriptor table. */
 #define	FILEDESC_LOCK_INIT(fdp)	sx_init(&(fdp)->fd_sx, "filedesc structure")
 #define	FILEDESC_LOCK_DESTROY(fdp)	sx_destroy(&(fdp)->fd_sx)
 #define	FILEDESC_LOCK(fdp)	(&(fdp)->fd_sx)
+#ifndef __rtems__
 #define	FILEDESC_XLOCK(fdp)	sx_xlock(&(fdp)->fd_sx)
 #define	FILEDESC_XUNLOCK(fdp)	sx_xunlock(&(fdp)->fd_sx)
 #define	FILEDESC_SLOCK(fdp)	sx_slock(&(fdp)->fd_sx)
 #define	FILEDESC_SUNLOCK(fdp)	sx_sunlock(&(fdp)->fd_sx)
+#else /* __rtems__ */
+#define	FILEDESC_XLOCK(fdp)	rtems_libio_lock()
+#define	FILEDESC_XUNLOCK(fdp)	rtems_libio_unlock()
+#define	FILEDESC_SLOCK(fdp)	rtems_libio_lock()
+#define	FILEDESC_SUNLOCK(fdp)	rtems_libio_unlock()
+#endif /* __rtems__ */
 
 #define	FILEDESC_LOCK_ASSERT(fdp)	sx_assert(&(fdp)->fd_sx, SX_LOCKED | \
 					    SX_NOTRECURSED)
@@ -154,17 +175,42 @@ enum {
 
 struct thread;
 
-void	filecaps_init(struct filecaps *fcaps);
+static __inline void
+filecaps_init(struct filecaps *fcaps)
+{
+
+        bzero(fcaps, sizeof(*fcaps));
+        fcaps->fc_nioctls = -1;
+}
 bool	filecaps_copy(const struct filecaps *src, struct filecaps *dst,
 	    bool locked);
 void	filecaps_move(struct filecaps *src, struct filecaps *dst);
+#ifndef __rtems__
 void	filecaps_free(struct filecaps *fcaps);
+#else /* __rtems__ */
+#define	filecaps_free(fcaps) do { } while (0)
+#endif /* __rtems__ */
 
 int	closef(struct file *fp, struct thread *td);
 int	dupfdopen(struct thread *td, struct filedesc *fdp, int dfd, int mode,
 	    int openerror, int *indxp);
+#ifndef __rtems__
 int	falloc_caps(struct thread *td, struct file **resultfp, int *resultfd,
 	    int flags, struct filecaps *fcaps);
+#else /* __rtems__ */
+int rtems_bsd_falloc(struct file **resultfp, int *resultfd);
+
+static inline int
+falloc_caps(struct thread *td, struct file **resultfp, int *resultfd,
+    int flags, struct filecaps *fcaps)
+{
+
+	(void)td;
+	(void)flags;
+	(void)fcaps;
+	return (rtems_bsd_falloc(resultfp, resultfd));
+}
+#endif /* __rtems__ */
 int	falloc_noinstall(struct thread *td, struct file **resultfp);
 void	_finstall(struct filedesc *fdp, struct file *fp, int fd, int flags,
 	    struct filecaps *fcaps);
@@ -173,7 +219,20 @@ int	finstall(struct thread *td, struct file *fp, int *resultfd, int flags,
 int	fdalloc(struct thread *td, int minfd, int *result);
 int	fdallocn(struct thread *td, int minfd, int *fds, int n);
 int	fdcheckstd(struct thread *td);
+#ifndef __rtems__
 void	fdclose(struct thread *td, struct file *fp, int idx);
+#else /* __rtems__ */
+void rtems_bsd_fdclose(struct file *fp);
+
+static inline void
+fdclose(struct thread *td, struct file *fp, int idx)
+{
+
+	(void)td;
+	(void)idx;
+	rtems_bsd_fdclose(fp);
+}
+#endif /* __rtems__ */
 void	fdcloseexec(struct thread *td);
 void	fdsetugidsafety(struct thread *td);
 struct	filedesc *fdcopy(struct filedesc *fdp);
@@ -192,6 +251,7 @@ int	getvnode(struct thread *td, int fd, cap_rights_t *rightsp,
 	    struct file **fpp);
 void	mountcheckdirs(struct vnode *olddp, struct vnode *newdp);
 
+#ifndef __rtems__
 int	fget_cap_locked(struct filedesc *fdp, int fd, cap_rights_t *needrightsp,
 	    struct file **fpp, struct filecaps *havecapsp);
 int	fget_cap(struct thread *td, int fd, cap_rights_t *needrightsp,
@@ -245,6 +305,34 @@ void	pwd_chdir(struct thread *td, struct vnode *vp);
 int	pwd_chroot(struct thread *td, struct vnode *vp);
 void	pwd_ensure_dirs(void);
 
+#else /* __rtems__ */
+static inline int
+fget_cap(struct thread *td, int fd, cap_rights_t *needrightsp,
+    struct file **fpp, struct filecaps *havecapsp)
+{
+
+	(void)td;
+	(void)needrightsp;
+	(void)havecapsp;
+	return (rtems_bsd_fget(fd, fpp, LIBIO_FLAGS_OPEN));
+}
+
+#define	fget_cap_locked(fdp, fd, needrightsp, fpp, havecapsp) \
+    fget_cap(NULL, fd, needrightsp, fpp, havecapsp)
+
+static inline int
+rtems_bsd_fget_unlocked(int fd, struct file **fpp, seq_t *seqp)
+{
+
+	(void)seqp;
+	return (rtems_bsd_fget(fd, fpp, LIBIO_FLAGS_OPEN));
+}
+
+#define	fget_unlocked(fdp, fd, needrightsp, fpp, seqp) \
+    rtems_bsd_fget_unlocked(fd, fpp, seqp)
+
+#include <machine/rtems-bsd-libio.h>
+#endif /* __rtems__ */
 #endif /* _KERNEL */
 
 #endif /* !_SYS_FILEDESC_H_ */

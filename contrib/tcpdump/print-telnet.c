@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*	$NetBSD: print-telnet.c,v 1.2 1999/10/11 12:40:12 sjg Exp $ 	*/
 
 /*-
@@ -555,3 +559,6 @@ telnet_print(netdissect_options *ndo, const u_char *sp, u_int length)
 trunc:
 	ND_PRINT((ndo, "%s", tstr));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-telnet-data.h"
+#endif /* __rtems__ */

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-netstat-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-4-Clause
  *
@@ -41,6 +45,9 @@ static char sccsid[] = "@(#)mbuf.c	8.1 (Berkeley) 6/6/93";
 #endif /* not lint */
 #endif
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -62,6 +69,9 @@ __FBSDID("$FreeBSD$");
 #include <string.h>
 #include <libxo/xo.h>
 #include "netstat.h"
+#ifdef __rtems__
+#include "rtems-bsd-netstat-mbuf-data.h"
+#endif /* __rtems__ */
 
 /*
  * Print mbuf statistics.
@@ -107,6 +117,7 @@ mbpr(void *kvmd, u_long mbaddr)
 			goto out;
 		}
 	} else {
+#ifndef __rtems__
 		if (memstat_kvm_all(mtlp, kvmd) < 0) {
 			error = memstat_mtl_geterror(mtlp);
 			if (error == MEMSTAT_ERROR_KVM)
@@ -117,6 +128,10 @@ mbpr(void *kvmd, u_long mbaddr)
 				    memstat_strerror(error));
 			goto out;
 		}
+#else /* __rtems__ */
+		warnx("mbpr: not implemented");
+		goto out;
+#endif /* __rtems__ */
 	}
 
 	mtp = memstat_mtl_find(mtlp, ALLOCATOR_UMA, MBUF_MEM_NAME);
@@ -156,6 +171,7 @@ mbpr(void *kvmd, u_long mbaddr)
 	cluster_sleeps = memstat_get_sleeps(mtp);
 	cluster_size = memstat_get_size(mtp);
 
+#ifndef __rtems__
 	mtp = memstat_mtl_find(mtlp, ALLOCATOR_MALLOC, MBUF_TAG_MEM_NAME);
 	if (mtp == NULL) {
 		xo_warnx("memstat_mtl_find: malloc type %s not found",
@@ -163,6 +179,9 @@ mbpr(void *kvmd, u_long mbaddr)
 		goto out;
 	}
 	tag_bytes = memstat_get_bytes(mtp);
+#else /* __rtems__ */
+	tag_bytes = 0;
+#endif /* __rtems__ */
 
 	mtp = memstat_mtl_find(mtlp, ALLOCATOR_UMA, MBUF_JUMBOP_MEM_NAME);
 	if (mtp == NULL) {

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /* Copyright (c) 2013, The TCPDUMP project
  * All rights reserved.
  *
@@ -337,3 +341,6 @@ trunc:
   ND_PRINT((ndo, "%s", tstr));
 }
 
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-m3ua-data.h"
+#endif /* __rtems__ */

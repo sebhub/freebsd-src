@@ -445,11 +445,13 @@ nvme_qpair_complete_tracker(struct nvme_tracker *tr,
 	KASSERT(cpl->cid == req->cmd.cid, ("cpl cid does not match cmd cid\n"));
 
 	if (!retry) {
+#ifndef __rtems__
 		if (req->type != NVME_REQUEST_NULL) {
 			bus_dmamap_sync(qpair->dma_tag_payload,
 			    tr->payload_dma_map,
 			    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
 		}
+#endif /* __rtems__ */
 		if (req->cb_fn)
 			req->cb_fn(req->cb_arg, cpl);
 	}
@@ -461,10 +463,12 @@ nvme_qpair_complete_tracker(struct nvme_tracker *tr,
 		req->retries++;
 		nvme_qpair_submit_tracker(qpair, tr);
 	} else {
+#ifndef __rtems__
 		if (req->type != NVME_REQUEST_NULL) {
 			bus_dmamap_unload(qpair->dma_tag_payload,
 			    tr->payload_dma_map);
 		}
+#endif /* __rtems__ */
 
 		nvme_free_request(req);
 		tr->req = NULL;
@@ -583,8 +587,12 @@ nvme_qpair_process_completions(struct nvme_qpair *qpair)
 		}
 	}
 
+#ifndef __rtems__
 	bus_dmamap_sync(qpair->dma_tag, qpair->queuemem_map,
 	    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
+#else /* __rtems__ */
+	rmb();
+#endif /* __rtems__ */
 	while (1) {
 		cpl = qpair->cpl[qpair->cq_head];
 
@@ -631,8 +639,13 @@ nvme_qpair_process_completions(struct nvme_qpair *qpair)
 			qpair->phase = !qpair->phase;			/* 3 */
 		}
 
+#ifndef __rtems__
 		bus_space_write_4(qpair->ctrlr->bus_tag, qpair->ctrlr->bus_handle,
 		    qpair->cq_hdbl_off, qpair->cq_head);
+#else /* __rtems__ */
+		bus_space_write_4(qpair->ctrlr->bus_tag, qpair->ctrlr->bus_handle,
+		    qpair->cq_hdbl_off, htole32(qpair->cq_head));
+#endif /* __rtems__ */
 	}
 	return (done != 0);
 }
@@ -685,6 +698,7 @@ nvme_qpair_construct(struct nvme_qpair *qpair,
 
 	mtx_init(&qpair->lock, "nvme qpair lock", NULL, MTX_DEF);
 
+#ifndef __rtems__
 	/* Note: NVMe PRP format is restricted to 4-byte alignment. */
 	err = bus_dma_tag_create(bus_get_dma_tag(ctrlr->dev),
 	    4, PAGE_SIZE, BUS_SPACE_MAXADDR,
@@ -695,6 +709,7 @@ nvme_qpair_construct(struct nvme_qpair *qpair,
 		nvme_printf(ctrlr, "payload tag create failed %d\n", err);
 		goto out;
 	}
+#endif /* __rtems__ */
 
 	/*
 	 * Each component must be page aligned, and individual PRP lists
@@ -715,7 +730,9 @@ nvme_qpair_construct(struct nvme_qpair *qpair,
 		nvme_printf(ctrlr, "tag create failed %d\n", err);
 		goto out;
 	}
+#ifndef __rtems__
 	bus_dma_tag_set_domain(qpair->dma_tag, qpair->domain);
+#endif /* __rtems__ */
 
 	if (bus_dmamem_alloc(qpair->dma_tag, (void **)&queuemem,
 	    BUS_DMA_NOWAIT, &qpair->queuemem_map)) {
@@ -776,8 +793,10 @@ nvme_qpair_construct(struct nvme_qpair *qpair,
 
 		tr = malloc_domainset(sizeof(*tr), M_NVME,
 		    DOMAINSET_PREF(qpair->domain), M_ZERO | M_WAITOK);
+#ifndef __rtems__
 		bus_dmamap_create(qpair->dma_tag_payload, 0,
 		    &tr->payload_dma_map);
+#endif /* __rtems__ */
 		callout_init(&tr->timer, 1);
 		tr->cid = i;
 		tr->qpair = qpair;
@@ -830,16 +849,20 @@ nvme_qpair_destroy(struct nvme_qpair *qpair)
 	while (!TAILQ_EMPTY(&qpair->free_tr)) {
 		tr = TAILQ_FIRST(&qpair->free_tr);
 		TAILQ_REMOVE(&qpair->free_tr, tr, tailq);
+#ifndef __rtems__
 		bus_dmamap_destroy(qpair->dma_tag_payload,
 		    tr->payload_dma_map);
+#endif /* __rtems__ */
 		free_domain(tr, M_NVME);
 	}
 
 	if (qpair->dma_tag)
 		bus_dma_tag_destroy(qpair->dma_tag);
 
+#ifndef __rtems__
 	if (qpair->dma_tag_payload)
 		bus_dma_tag_destroy(qpair->dma_tag_payload);
+#endif /* __rtems__ */
 }
 
 static void
@@ -949,8 +972,13 @@ nvme_qpair_submit_tracker(struct nvme_qpair *qpair, struct nvme_tracker *tr)
 	ctrlr = qpair->ctrlr;
 
 	if (req->timeout)
+#ifndef __rtems__
 		callout_reset_on(&tr->timer, ctrlr->timeout_period * hz,
 		    nvme_timeout, tr, qpair->cpu);
+#else /* __rtems__ */
+		callout_reset_on(&tr->timer, ctrlr->timeout_period * hz,
+		    nvme_timeout, tr, -1);
+#endif /* __rtems__ */
 
 	/* Copy the command from the tracker to the submission queue. */
 	memcpy(&qpair->cmd[qpair->sq_tail], &req->cmd, sizeof(req->cmd));
@@ -958,6 +986,7 @@ nvme_qpair_submit_tracker(struct nvme_qpair *qpair, struct nvme_tracker *tr)
 	if (++qpair->sq_tail == qpair->num_entries)
 		qpair->sq_tail = 0;
 
+#ifndef __rtems__
 	bus_dmamap_sync(qpair->dma_tag, qpair->queuemem_map,
 	    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
 #ifndef __powerpc__
@@ -967,9 +996,17 @@ nvme_qpair_submit_tracker(struct nvme_qpair *qpair, struct nvme_tracker *tr)
 	 */
 	wmb();
 #endif
+#else /* __rtems__ */
+	wmb();
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 	bus_space_write_4(qpair->ctrlr->bus_tag, qpair->ctrlr->bus_handle,
 	    qpair->sq_tdbl_off, qpair->sq_tail);
+#else /* __rtems__ */
+	bus_space_write_4(qpair->ctrlr->bus_tag, qpair->ctrlr->bus_handle,
+	    qpair->sq_tdbl_off, htole32(qpair->sq_tail));
+#endif /* __rtems__ */
 	qpair->num_cmds++;
 }
 
@@ -979,6 +1016,7 @@ nvme_payload_map(void *arg, bus_dma_segment_t *seg, int nseg, int error)
 	struct nvme_tracker 	*tr = arg;
 	uint32_t		cur_nseg;
 
+#ifndef __rtems__
 	/*
 	 * If the mapping operation failed, return immediately.  The caller
 	 *  is responsible for detecting the error status and failing the
@@ -989,6 +1027,7 @@ nvme_payload_map(void *arg, bus_dma_segment_t *seg, int nseg, int error)
 		    "nvme_payload_map err %d\n", error);
 		return;
 	}
+#endif /* __rtems__ */
 
 	/*
 	 * Note that we specified PAGE_SIZE for alignment and max
@@ -1017,16 +1056,70 @@ nvme_payload_map(void *arg, bus_dma_segment_t *seg, int nseg, int error)
 		tr->req->cmd.prp2 = 0;
 	}
 
+#ifndef __rtems__
 	bus_dmamap_sync(tr->qpair->dma_tag_payload, tr->payload_dma_map,
 	    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
+#endif /* __rtems__ */
 	nvme_qpair_submit_tracker(tr->qpair, tr);
 }
+#ifdef __rtems__
+static void
+nvme_qpair_submit_request_iov(struct nvme_qpair *qpair,
+    struct nvme_request *req, struct nvme_tracker *tr)
+{
+	const struct iovec *iov;
+	size_t n;
+	size_t desc_count;
+	struct nvme_sgl_desc first;
+	struct nvme_sgl_desc *desc;
+
+	/* Enable SGL for this command */
+	req->cmd.fuse |= 0x40;
+
+	desc = (struct nvme_sgl_desc *)tr->prp;
+	desc_count = 0;
+	n = req->payload_size;
+	iov = req->u.iov;
+
+	while (n > 0) {
+		BSD_ASSERT(desc_count < (NVME_MAX_PRP_LIST_ENTRIES *
+		    sizeof(*tr->prp) / sizeof(*desc)));
+		desc->address = htole64((uintptr_t)iov->iov_base);
+		desc->length = htole32(iov->iov_len);
+		desc->reserved12[0] = 0;
+		desc->reserved12[1] = 0;
+		desc->reserved12[2] = 0;
+		desc->sgl_ident = NVME_SGL_IDENT_TYPE_DATA_BLOCK <<
+		    NVME_SGL_IDENT_TYPE_SHIFT;
+		BSD_ASSERT(n >= iov->iov_len);
+		n -= iov->iov_len;
+		++iov;
+		++desc;
+		++desc_count;
+	}
+
+	first.address = htole64((uint64_t)tr->prp_bus_addr);
+	first.length = htole32(desc_count * sizeof(*desc));
+	first.sgl_ident = NVME_SGL_IDENT_TYPE_LAST_SEG_DESC <<
+	    NVME_SGL_IDENT_TYPE_SHIFT;
+	memcpy(&req->cmd.prp1, &first, sizeof(first));
+	nvme_qpair_submit_tracker(tr->qpair, tr);
+}
+#endif /* __rtems__ */
 
 static void
 _nvme_qpair_submit_request(struct nvme_qpair *qpair, struct nvme_request *req)
 {
 	struct nvme_tracker	*tr;
 	int			err = 0;
+#ifdef __rtems__
+	bus_dma_segment_t	segs[NVME_MAX_XFER_SIZE / PAGE_SIZE + 1];
+	int			nseg;
+	int			i;
+	bus_addr_t              addr;
+	bus_addr_t              next_page;
+	uint32_t                size;
+#endif /* __rtems__ */
 
 	mtx_assert(&qpair->lock, MA_OWNED);
 
@@ -1069,16 +1162,39 @@ _nvme_qpair_submit_request(struct nvme_qpair *qpair, struct nvme_request *req)
 		KASSERT(req->payload_size <= qpair->ctrlr->max_xfer_size,
 		    ("payload_size (%d) exceeds max_xfer_size (%d)\n",
 		    req->payload_size, qpair->ctrlr->max_xfer_size));
+#ifndef __rtems__
 		err = bus_dmamap_load(tr->qpair->dma_tag_payload,
 		    tr->payload_dma_map, req->u.payload, req->payload_size,
 		    nvme_payload_map, tr, 0);
 		if (err != 0)
 			nvme_printf(qpair->ctrlr,
 			    "bus_dmamap_load returned 0x%x!\n", err);
+#else /* __rtems__ */
+		size = req->payload_size;
+		addr = (bus_addr_t)req->u.payload;
+		next_page = (addr + PAGE_SIZE) & ~(PAGE_SIZE - 1);
+
+		segs[0].ds_addr = addr;
+		if (size > next_page - addr) {
+			size -= next_page - addr;
+			addr = next_page;
+		} else {
+			size = 0;
+		}
+
+		nseg = (size + PAGE_SIZE - 1) / PAGE_SIZE + 1;
+		for (i = 1; i < nseg; ++i) {
+			segs[i].ds_addr = addr;
+			addr += PAGE_SIZE;
+		}
+
+		nvme_payload_map(tr, segs, nseg, 0);
+#endif /* __rtems__ */
 		break;
 	case NVME_REQUEST_NULL:
 		nvme_qpair_submit_tracker(tr->qpair, tr);
 		break;
+#ifndef __rtems__
 	case NVME_REQUEST_BIO:
 		KASSERT(req->u.bio->bio_bcount <= qpair->ctrlr->max_xfer_size,
 		    ("bio->bio_bcount (%jd) exceeds max_xfer_size (%d)\n",
@@ -1098,6 +1214,11 @@ _nvme_qpair_submit_request(struct nvme_qpair *qpair, struct nvme_request *req)
 			nvme_printf(qpair->ctrlr,
 			    "bus_dmamap_load_ccb returned 0x%x!\n", err);
 		break;
+#else /* __rtems__ */
+	case NVME_REQUEST_IOV:
+		nvme_qpair_submit_request_iov(tr->qpair, req, tr);
+		break;
+#endif /* __rtems__ */
 	default:
 		panic("unknown nvme request type 0x%x\n", req->type);
 		break;

@@ -86,6 +86,13 @@ __FBSDID("$FreeBSD$");
 #include <dev/mmc/mmcvar.h>
 
 #include "mmcbus_if.h"
+#ifdef __rtems__
+#include <machine/rtems-bsd-support.h>
+#include <rtems/bdbuf.h>
+#include <rtems/diskdevs.h>
+#include <rtems/libio.h>
+#include <rtems/media.h>
+#endif /* __rtems__ */
 
 #if __FreeBSD_version < 800002
 #define	kproc_create	kthread_create
@@ -107,10 +114,12 @@ struct mmcsd_part {
 	struct mtx disk_mtx;
 	struct mtx ioctl_mtx;
 	struct mmcsd_softc *sc;
+#ifndef __rtems__
 	struct disk *disk;
 	struct proc *p;
 	struct bio_queue_head bio_queue;
 	daddr_t eblock, eend;	/* Range remaining after the last erase. */
+#endif /* __rtems__ */
 	u_int cnt;
 	u_int type;
 	int running;
@@ -145,7 +154,11 @@ struct mmcsd_softc {
 	struct cdev *rpmb_dev;
 };
 
+#ifndef __rtems__
 static const char *errmsg[] =
+#else /* __rtems__ */
+static const char * const errmsg[] =
+#endif /* __rtems__ */
 {
 	"None",
 	"Timeout",
@@ -170,6 +183,7 @@ static int mmcsd_detach(device_t dev);
 static int mmcsd_probe(device_t dev);
 static int mmcsd_shutdown(device_t dev);
 
+#ifndef __rtems__
 /* disk routines */
 static int mmcsd_close(struct disk *dp);
 static int mmcsd_dump(void *arg, void *virtual, vm_offset_t physical,
@@ -179,6 +193,7 @@ static int mmcsd_ioctl_disk(struct disk *disk, u_long cmd, void *data,
     int fflag, struct thread *td);
 static void mmcsd_strategy(struct bio *bp);
 static void mmcsd_task(void *arg);
+#endif /* __rtems__ */
 
 /* RMPB cdev interface */
 static int mmcsd_ioctl_rpmb(struct cdev *dev, u_long cmd, caddr_t data,
@@ -187,18 +202,27 @@ static int mmcsd_ioctl_rpmb(struct cdev *dev, u_long cmd, caddr_t data,
 static void mmcsd_add_part(struct mmcsd_softc *sc, u_int type,
     const char *name, u_int cnt, off_t media_size, bool ro);
 static int mmcsd_bus_bit_width(device_t dev);
+#ifndef __rtems__
 static daddr_t mmcsd_delete(struct mmcsd_part *part, struct bio *bp);
+#endif /* __rtems__ */
 static const char *mmcsd_errmsg(int e);
+#ifndef __rtems__
 static int mmcsd_flush_cache(struct mmcsd_softc *sc);
+#endif /* __rtems__ */
+static const char *mmcsd_errmsg(int e);
 static int mmcsd_ioctl(struct mmcsd_part *part, u_long cmd, void *data,
     int fflag, struct thread *td);
 static int mmcsd_ioctl_cmd(struct mmcsd_part *part, struct mmc_ioc_cmd *mic,
     int fflag);
 static uintmax_t mmcsd_pretty_size(off_t size, char *unit);
+#ifndef __rtems__
 static daddr_t mmcsd_rw(struct mmcsd_part *part, struct bio *bp);
+#endif /* __rtems__ */
 static int mmcsd_set_blockcount(struct mmcsd_softc *sc, u_int count, bool rel);
+#ifndef __rtems__
 static int mmcsd_slicer(device_t dev, const char *provider,
     struct flash_slice *slices, int *nslices);
+#endif /* __rtems__ */
 static int mmcsd_switch_part(device_t bus, device_t dev, uint16_t rca,
     u_int part);
 
@@ -231,6 +255,219 @@ mmcsd_probe(device_t dev)
 	return (0);
 }
 
+#ifdef __rtems__
+static rtems_status_code
+rtems_bsd_mmcsd_set_block_size(device_t dev, uint32_t block_size)
+{
+	rtems_status_code status_code = RTEMS_SUCCESSFUL;
+	struct mmc_command cmd;
+	struct mmc_request req;
+
+	memset(&req, 0, sizeof(req));
+	memset(&cmd, 0, sizeof(cmd));
+
+	req.cmd = &cmd;
+	cmd.opcode = MMC_SET_BLOCKLEN;
+	cmd.flags = MMC_RSP_R1 | MMC_CMD_AC;
+	cmd.arg = block_size;
+	MMCBUS_WAIT_FOR_REQUEST(device_get_parent(dev), dev,
+	    &req);
+	if (req.cmd->error != MMC_ERR_NONE) {
+		status_code = RTEMS_IO_ERROR;
+	}
+
+	return status_code;
+}
+
+static int
+rtems_bsd_mmcsd_disk_read_write(struct mmcsd_part *part, rtems_blkdev_request *blkreq)
+{
+	rtems_status_code status_code = RTEMS_SUCCESSFUL;
+	struct mmcsd_softc *sc = part->sc;
+	device_t dev = sc->dev;
+	int shift = mmc_get_high_cap(dev) ? 0 : 9;
+	int rca = mmc_get_rca(dev);
+	uint32_t buffer_count = blkreq->bufnum;
+	uint32_t transfer_bytes = blkreq->bufs[0].length;
+	uint32_t block_count = transfer_bytes / MMC_SECTOR_SIZE;
+	uint32_t opcode;
+	uint32_t data_flags;
+	uint32_t i;
+
+	if (blkreq->req == RTEMS_BLKDEV_REQ_WRITE) {
+		if (block_count > 1) {
+			opcode = MMC_WRITE_MULTIPLE_BLOCK;
+		} else {
+			opcode = MMC_WRITE_BLOCK;
+		}
+
+		data_flags = MMC_DATA_WRITE;
+	} else {
+		BSD_ASSERT(blkreq->req == RTEMS_BLKDEV_REQ_READ);
+
+		if (block_count > 1) {
+			opcode = MMC_READ_MULTIPLE_BLOCK;
+		} else {
+			opcode = MMC_READ_SINGLE_BLOCK;
+		}
+
+		data_flags = MMC_DATA_READ;
+	}
+
+	MMCSD_DISK_LOCK(part);
+
+	for (i = 0; i < buffer_count; ++i) {
+		rtems_blkdev_sg_buffer *sg = &blkreq->bufs [i];
+		struct mmc_request req;
+		struct mmc_command cmd;
+		struct mmc_command stop;
+		struct mmc_data data;
+		rtems_interval timeout;
+
+		memset(&req, 0, sizeof(req));
+		memset(&cmd, 0, sizeof(cmd));
+		memset(&stop, 0, sizeof(stop));
+
+		req.cmd = &cmd;
+
+		cmd.opcode = opcode;
+		cmd.flags = MMC_RSP_R1 | MMC_CMD_ADTC;
+		cmd.data = &data;
+		cmd.arg = sg->block << shift;
+
+		if (block_count > 1) {
+			data_flags |= MMC_DATA_MULTI;
+			stop.opcode = MMC_STOP_TRANSMISSION;
+			stop.flags = MMC_RSP_R1B | MMC_CMD_AC;
+			req.stop = &stop;
+		}
+
+		data.flags = data_flags;;
+		data.data = sg->buffer;
+		data.mrq = &req;
+		data.len = transfer_bytes;
+
+		MMCBUS_WAIT_FOR_REQUEST(device_get_parent(dev), dev,
+		    &req);
+		if (req.cmd->error != MMC_ERR_NONE) {
+			status_code = RTEMS_IO_ERROR;
+			goto error;
+		}
+
+		timeout = rtems_clock_tick_later_usec(250000);
+		while (1) {
+			struct mmc_request req2;
+			struct mmc_command cmd2;
+			uint32_t status;
+
+			memset(&req2, 0, sizeof(req2));
+			memset(&cmd2, 0, sizeof(cmd2));
+
+			req2.cmd = &cmd2;
+
+			cmd2.opcode = MMC_SEND_STATUS;
+			cmd2.arg = rca << 16;
+			cmd2.flags = MMC_RSP_R1 | MMC_CMD_AC;
+
+			MMCBUS_WAIT_FOR_REQUEST(device_get_parent(dev), dev,
+			    &req2);
+			if (req2.cmd->error != MMC_ERR_NONE) {
+				status_code = RTEMS_IO_ERROR;
+				goto error;
+			}
+
+			status = cmd2.resp[0];
+			if ((status & R1_READY_FOR_DATA) != 0
+			    && R1_CURRENT_STATE(status) != R1_STATE_PRG) {
+				break;
+			}
+
+			if (!rtems_clock_tick_before(timeout)) {
+				status_code = RTEMS_IO_ERROR;
+				goto error;
+			}
+		}
+	}
+
+error:
+
+	MMCSD_DISK_UNLOCK(part);
+
+	rtems_blkdev_request_done(blkreq, status_code);
+
+	return 0;
+}
+
+static int
+rtems_bsd_mmcsd_disk_ioctl(rtems_disk_device *dd, uint32_t req, void *arg)
+{
+
+	if (req == RTEMS_BLKIO_REQUEST) {
+		struct mmcsd_part *part = rtems_disk_get_driver_data(dd);
+		rtems_blkdev_request *blkreq = arg;
+
+		return rtems_bsd_mmcsd_disk_read_write(part, blkreq);
+	} else if (req == RTEMS_BLKIO_CAPABILITIES) {
+		*(uint32_t *) arg = RTEMS_BLKDEV_CAP_MULTISECTOR_CONT;
+		return 0;
+	} else {
+		return rtems_blkdev_ioctl(dd, req, arg);
+	}
+}
+
+static rtems_status_code
+rtems_bsd_mmcsd_attach_worker(rtems_media_state state, const char *src, char **dest, void *arg)
+{
+	rtems_status_code status_code = RTEMS_SUCCESSFUL;
+	struct mmcsd_part *part = arg;
+	char *disk = NULL;
+
+	if (state == RTEMS_MEDIA_STATE_READY) {
+		struct mmcsd_softc *sc = part->sc;
+		device_t dev = sc->dev;
+		uint32_t block_count = mmc_get_media_size(dev);
+		uint32_t block_size = MMC_SECTOR_SIZE;
+
+		disk = rtems_media_create_path("/dev", src, device_get_unit(dev));
+		if (disk == NULL) {
+			printf("OOPS: create path failed\n");
+			goto error;
+		}
+
+		/*
+		 * FIXME: There is no release for this acquire. Implementing
+		 * this would be necessary for:
+		 * - multiple hardware partitions of eMMC chips
+		 * - multiple devices on one bus
+		 *
+		 * On the other hand it would mean that the bus has to be
+		 * acquired on every read which would decrease the performance.
+		 */
+		MMCBUS_ACQUIRE_BUS(device_get_parent(dev), dev);
+
+		status_code = rtems_bsd_mmcsd_set_block_size(dev, block_size);
+		if (status_code != RTEMS_SUCCESSFUL) {
+			printf("OOPS: set block size failed\n");
+			goto error;
+		}
+
+		status_code = rtems_blkdev_create(disk, block_size,
+		    block_count, rtems_bsd_mmcsd_disk_ioctl, part);
+		if (status_code != RTEMS_SUCCESSFUL) {
+			goto error;
+		}
+
+		*dest = strdup(disk, M_RTEMS_HEAP);
+	}
+
+	return RTEMS_SUCCESSFUL;
+
+error:
+	free(disk, M_RTEMS_HEAP);
+
+	return RTEMS_IO_ERROR;
+}
+#endif /* __rtems__ */
 static int
 mmcsd_attach(device_t dev)
 {
@@ -491,7 +728,9 @@ mmcsd_add_part(struct mmcsd_softc *sc, u_int type, const char *name, u_int cnt,
 	const char *ext;
 	const uint8_t *ext_csd;
 	struct mmcsd_part *part;
+#ifndef __rtems__
 	struct disk *d;
+#endif /* __rtems__ */
 	uintmax_t bytes;
 	u_int gp;
 	uint32_t speed;
@@ -532,9 +771,14 @@ mmcsd_add_part(struct mmcsd_softc *sc, u_int type, const char *name, u_int cnt,
 			free(part, M_DEVBUF);
 			return;
 		}
+#ifdef __rtems__
+	} else if (type != EXT_CSD_PART_CONFIG_ACC_DEFAULT) {
+		printf("%s: Additional partition. This is currently not supported in RTEMS.", part->name);
+#endif /* __rtems__ */
 	} else {
 		MMCSD_DISK_LOCK_INIT(part);
 
+#ifndef __rtems__
 		d = part->disk = disk_alloc();
 		d->d_close = mmcsd_close;
 		d->d_strategy = mmcsd_strategy;
@@ -564,6 +808,11 @@ mmcsd_add_part(struct mmcsd_softc *sc, u_int type, const char *name, u_int cnt,
 		part->running = 1;
 		kproc_create(&mmcsd_task, part, &part->p, 0, 0,
 		    "%s%d: mmc/sd card", part->name, cnt);
+#else /* __rtems__ */
+		rtems_status_code status_code = rtems_media_server_disk_attach(
+		    part->name, rtems_bsd_mmcsd_attach_worker, part);
+		BSD_ASSERT(status_code == RTEMS_SUCCESSFUL);
+#endif /* __rtems__ */
 	}
 
 	bytes = mmcsd_pretty_size(media_size, unit);
@@ -623,6 +872,7 @@ mmcsd_add_part(struct mmcsd_softc *sc, u_int type, const char *name, u_int cnt,
 	}
 }
 
+#ifndef __rtems__
 static int
 mmcsd_slicer(device_t dev, const char *provider,
     struct flash_slice *slices, int *nslices)
@@ -651,10 +901,12 @@ mmcsd_slicer(device_t dev, const char *provider,
 	slices[0].label = MMCSD_LABEL_ENH;
 	return (0);
 }
+#endif /* __rtems__ */
 
 static int
 mmcsd_detach(device_t dev)
 {
+#ifndef __rtems__
 	struct mmcsd_softc *sc = device_get_softc(dev);
 	struct mmcsd_part *part;
 	int i;
@@ -705,22 +957,30 @@ mmcsd_detach(device_t dev)
 	}
 	if (mmcsd_flush_cache(sc) != MMC_ERR_NONE)
 		device_printf(dev, "failed to flush cache\n");
+#else /* __rtems__ */
+	BSD_PANIC("FIXME");
+#endif /* __rtems__ */
 	return (0);
 }
 
 static int
 mmcsd_shutdown(device_t dev)
 {
+#ifndef __rtems__
 	struct mmcsd_softc *sc = device_get_softc(dev);
 
 	if (mmcsd_flush_cache(sc) != MMC_ERR_NONE)
 		device_printf(dev, "failed to flush cache\n");
+#else /* __rtems__ */
+	BSD_PANIC("FIXME");
+#endif /* __rtems__ */
 	return (0);
 }
 
 static int
 mmcsd_suspend(device_t dev)
 {
+#ifndef __rtems__
 	struct mmcsd_softc *sc = device_get_softc(dev);
 	struct mmcsd_part *part;
 	int i;
@@ -752,12 +1012,16 @@ mmcsd_suspend(device_t dev)
 	}
 	if (mmcsd_flush_cache(sc) != MMC_ERR_NONE)
 		device_printf(dev, "failed to flush cache\n");
+#else /* __rtems__ */
+	BSD_PANIC("FIXME");
+#endif /* __rtems__ */
 	return (0);
 }
 
 static int
 mmcsd_resume(device_t dev)
 {
+#ifndef __rtems__
 	struct mmcsd_softc *sc = device_get_softc(dev);
 	struct mmcsd_part *part;
 	int i;
@@ -782,9 +1046,13 @@ mmcsd_resume(device_t dev)
 			MMCSD_IOCTL_UNLOCK(part);
 		}
 	}
+#else /* __rtems__ */
+	BSD_PANIC("FIXME");
+#endif /* __rtems__ */
 	return (0);
 }
 
+#ifndef __rtems__
 static int
 mmcsd_close(struct disk *dp)
 {
@@ -814,6 +1082,7 @@ mmcsd_strategy(struct bio *bp)
 		biofinish(bp, NULL, ENXIO);
 	}
 }
+#endif /* __rtems__ */
 
 static int
 mmcsd_ioctl_rpmb(struct cdev *dev, u_long cmd, caddr_t data,
@@ -823,6 +1092,7 @@ mmcsd_ioctl_rpmb(struct cdev *dev, u_long cmd, caddr_t data,
 	return (mmcsd_ioctl(dev->si_drv1, cmd, data, fflag, td));
 }
 
+#ifndef __rtems__
 static int
 mmcsd_ioctl_disk(struct disk *disk, u_long cmd, void *data, int fflag,
     struct thread *td)
@@ -830,6 +1100,7 @@ mmcsd_ioctl_disk(struct disk *disk, u_long cmd, void *data, int fflag,
 
 	return (mmcsd_ioctl(disk->d_drv1, cmd, data, fflag, td));
 }
+#endif /* __rtems__ */
 
 static int
 mmcsd_ioctl(struct mmcsd_part *part, u_long cmd, void *data, int fflag,
@@ -923,7 +1194,11 @@ mmcsd_ioctl_cmd(struct mmcsd_part *part, struct mmc_ioc_cmd *mic, int fflag)
 		goto out;
 	}
 	if (len != 0) {
+#ifndef __rtems__
 		dp = malloc(len, M_TEMP, M_WAITOK);
+#else /* __rtems__ */
+		dp = rtems_cache_aligned_malloc(len);
+#endif /* __rtems__ */
 		err = copyin((void *)(uintptr_t)mic->data_ptr, dp, len);
 		if (err != 0)
 			goto out;
@@ -1074,6 +1349,7 @@ out:
 	return (err);
 }
 
+#ifndef __rtems__
 static int
 mmcsd_getattr(struct bio *bp)
 {
@@ -1091,6 +1367,7 @@ mmcsd_getattr(struct bio *bp)
 	}
 	return (-1);
 }
+#endif /* __rtems__ */
 
 static int
 mmcsd_set_blockcount(struct mmcsd_softc *sc, u_int count, bool reliable)
@@ -1166,6 +1443,7 @@ mmcsd_errmsg(int e)
 	return (errmsg[e]);
 }
 
+#ifndef __rtems__
 static daddr_t
 mmcsd_rw(struct mmcsd_part *part, struct bio *bp)
 {
@@ -1502,6 +1780,7 @@ out:
 
 	kproc_exit(0);
 }
+#endif /* __rtems__ */
 
 static int
 mmcsd_bus_bit_width(device_t dev)
@@ -1514,6 +1793,7 @@ mmcsd_bus_bit_width(device_t dev)
 	return (8);
 }
 
+#ifndef __rtems__
 static int
 mmcsd_flush_cache(struct mmcsd_softc *sc)
 {
@@ -1537,6 +1817,7 @@ mmcsd_flush_cache(struct mmcsd_softc *sc)
 	MMCBUS_RELEASE_BUS(mmcbus, dev);
 	return (err);
 }
+#endif /* __rtems__ */
 
 static device_method_t mmcsd_methods[] = {
 	DEVMETHOD(device_probe, mmcsd_probe),
@@ -1559,6 +1840,7 @@ static int
 mmcsd_handler(module_t mod __unused, int what, void *arg __unused)
 {
 
+#ifndef __rtems__
 	switch (what) {
 	case MOD_LOAD:
 		flash_register_slicer(mmcsd_slicer, FLASH_SLICES_TYPE_MMC,
@@ -1568,6 +1850,7 @@ mmcsd_handler(module_t mod __unused, int what, void *arg __unused)
 		flash_register_slicer(NULL, FLASH_SLICES_TYPE_MMC, TRUE);
 		return (0);
 	}
+#endif /* __rtems__ */
 	return (0);
 }
 

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2014 VMware, Inc. All Rights Reserved.
  *
@@ -235,3 +239,6 @@ geneve_print(netdissect_options *ndo, const u_char *bp, u_int len)
 trunc:
     ND_PRINT((ndo, " [|geneve]"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-geneve-data.h"
+#endif /* __rtems__ */

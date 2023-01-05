@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-netstat-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-4-Clause AND BSD-3-Clause
  *
@@ -67,6 +71,9 @@
  *	@(#)mroute.c	8.2 (Berkeley) 4/28/95
  */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -97,6 +104,9 @@ __FBSDID("$FreeBSD$");
 #undef KERNEL
 
 #include "netstat.h"
+#ifdef __rtems__
+#include "rtems-bsd-netstat-mroute6-data.h"
+#endif /* __rtems__ */
 
 #define	WID_ORG	(Wflag ? 39 : (numeric_addr ? 29 : 18)) /* width of origin column */
 #define	WID_GRP	(Wflag ? 18 : (numeric_addr ? 16 : 18)) /* width of group column */

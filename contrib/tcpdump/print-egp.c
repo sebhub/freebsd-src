@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1991, 1992, 1993, 1994, 1995, 1996
  *	The Regents of the University of California.  All rights reserved.
@@ -374,3 +378,6 @@ egp_print(netdissect_options *ndo,
 		break;
 	}
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-egp-data.h"
+#endif /* __rtems__ */

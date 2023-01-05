@@ -32,6 +32,7 @@
 #define _SYS_STDDEF_H_
 
 #include <sys/cdefs.h>
+#ifndef __rtems__
 #include <sys/_null.h>
 #include <machine/_types.h>
 
@@ -41,5 +42,6 @@ typedef	__ptrdiff_t	ptrdiff_t;
 #endif
 
 #define	offsetof(type, field)	__offsetof(type, field)
+#endif /* __rtems__ */
 
 #endif /* !_SYS_STDDEF_H_ */

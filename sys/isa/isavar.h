@@ -35,7 +35,9 @@ struct isa_config;
 struct isa_pnp_id;
 typedef void isa_config_cb(void *arg, struct isa_config *config, int enable);
 
+#ifndef __rtems__
 #include "isa_if.h"
+#endif /* __rtems__ */
 #include <isa/pnpvar.h>
 
 #ifdef _KERNEL

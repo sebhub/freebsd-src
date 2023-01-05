@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2004 - Michael Richardson <mcr@xelerance.com>
  *
@@ -302,3 +306,6 @@ eap_print(netdissect_options *ndo,
  * c-basic-offset: 4
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-eap-data.h"
+#endif /* __rtems__ */

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /**
  * Copyright (c) 2012
  *
@@ -444,3 +448,6 @@ mptcp_print(netdissect_options *ndo,
         ND_PRINT((ndo, " %s", mptcp_options[subtype].name));
         return mptcp_options[subtype].print(ndo, cp, len, flags);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-mptcp-data.h"
+#endif /* __rtems__ */

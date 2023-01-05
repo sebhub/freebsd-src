@@ -90,6 +90,7 @@ __FBSDID("$FreeBSD$");
 
 #include <ddb/ddb.h>
 
+#ifndef __rtems__
 static MALLOC_DEFINE(M_FILEDESC, "filedesc", "Open file descriptor table");
 static MALLOC_DEFINE(M_FILEDESC_TO_LEADER, "filedesc_to_leader",
     "file desc to leader structures");
@@ -480,6 +481,7 @@ kern_fcntl_freebsd(struct thread *td, int fd, int cmd, long arg)
 	}
 	return (error);
 }
+#endif /* __rtems__ */
 
 int
 kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
@@ -502,6 +504,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 	AUDIT_ARG_FD(cmd);
 	AUDIT_ARG_CMD(cmd);
 	switch (cmd) {
+#ifndef __rtems__
 	case F_DUPFD:
 		tmp = arg;
 		error = kern_dup(td, FDDUP_FCNTL, 0, fd, tmp);
@@ -545,6 +548,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		}
 		FILEDESC_XUNLOCK(fdp);
 		break;
+#endif /* __rtems__ */
 
 	case F_GETFL:
 		error = fget_fcntl(td, fd, &cap_fcntl_rights, F_GETFL, &fp);
@@ -581,6 +585,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		fdrop(fp, td);
 		break;
 
+#ifndef __rtems__
 	case F_GETOWN:
 		error = fget_fcntl(td, fd, &cap_fcntl_rights, F_GETOWN, &fp);
 		if (error != 0)
@@ -797,6 +802,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 		VOP_UNLOCK(vp, 0);
 		fdrop(fp, td);
 		break;
+#endif /* __rtems__ */
 
 	default:
 		error = EINVAL;
@@ -805,6 +811,7 @@ kern_fcntl(struct thread *td, int fd, int cmd, intptr_t arg)
 	return (error);
 }
 
+#ifndef __rtems__
 static int
 getmaxfd(struct thread *td)
 {
@@ -4062,6 +4069,7 @@ filelistinit(void *dummy)
 SYSINIT(select, SI_SUB_LOCK, SI_ORDER_FIRST, filelistinit, NULL);
 
 /*-------------------------------------------------------------------*/
+#endif /* __rtems__ */
 
 static int
 badfo_readwrite(struct file *fp, struct uio *uio, struct ucred *active_cred,
@@ -4228,6 +4236,7 @@ invfo_sendfile(struct file *fp, int sockfd, struct uio *hdr_uio,
 	return (EINVAL);
 }
 
+#ifndef __rtems__
 /*-------------------------------------------------------------------*/
 
 /*
@@ -4281,3 +4290,4 @@ fildesc_drvinit(void *unused)
 }
 
 SYSINIT(fildescdev, SI_SUB_DRIVERS, SI_ORDER_MIDDLE, fildesc_drvinit, NULL);
+#endif /* __rtems__ */

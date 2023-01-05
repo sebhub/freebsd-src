@@ -148,7 +148,11 @@ extern void vm_ksubmap_init(struct kva_md_info *);
 
 extern int old_mlock;
 
+#ifndef __rtems__
 extern int vm_ndomains;
+#else /* __rtems__ */
+#define	vm_ndomains 1
+#endif /* __rtems__ */
 
 struct ucred;
 int swap_reserve(vm_ooffset_t incr);

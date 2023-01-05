@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
  *
  * Copyright (c) 2004 John Baldwin <jhb@FreeBSD.org>
+ * Copyright (c) 2015 embedded brains GmbH <rtems@embedded-brains.de>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -89,6 +90,11 @@ __FBSDID("$FreeBSD$");
 #ifdef DDB
 #include <ddb/ddb.h>
 #endif
+#ifdef __rtems__
+#include <machine/rtems-bsd-thread.h>
+#include <rtems/score/threadimpl.h>
+#include <rtems/score/watchdogimpl.h>
+#endif /* __rtems__ */
 
 
 /*
@@ -142,7 +148,11 @@ struct sleepqueue_chain {
 	u_int	sc_depth;			/* Length of sc_queues. */
 	u_int	sc_max_depth;			/* Max length of sc_queues. */
 #endif
+#if defined(__rtems__) && defined(RTEMS_SMP)
 } __aligned(CACHE_LINE_SIZE);
+#else /* __rtems__ */
+};
+#endif /* __rtems__ */
 
 #ifdef SLEEPQUEUE_PROFILING
 u_int sleepq_max_depth;
@@ -161,9 +171,11 @@ static uma_zone_t sleepq_zone;
 /*
  * Prototypes for non-exported routines.
  */
+#ifndef __rtems__
 static int	sleepq_catch_signals(void *wchan, int pri);
 static int	sleepq_check_signals(void);
 static int	sleepq_check_timeout(void);
+#endif /* __rtems__ */
 #ifdef INVARIANTS
 static void	sleepq_dtor(void *mem, int size, void *arg);
 #endif
@@ -171,7 +183,11 @@ static int	sleepq_init(void *mem, int size, int flags);
 static int	sleepq_resume_thread(struct sleepqueue *sq, struct thread *td,
 		    int pri);
 static void	sleepq_switch(void *wchan, int pri);
+#ifndef __rtems__
 static void	sleepq_timeout(void *arg);
+#else /* __rtems__ */
+static void	sleepq_timeout(Watchdog_Control *watchdog);
+#endif /* __rtems__ */
 
 SDT_PROBE_DECLARE(sched, , , sleep);
 SDT_PROBE_DECLARE(sched, , , wakeup);
@@ -227,7 +243,9 @@ init_sleepqueues(void)
 	    NULL, NULL, sleepq_init, NULL, UMA_ALIGN_CACHE, 0);
 #endif
 
+#ifndef __rtems__
 	thread0.td_sleepqueue = sleepq_alloc();
+#endif /* __rtems__ */
 }
 
 /*
@@ -307,6 +325,11 @@ sleepq_add(void *wchan, struct lock_object *lock, const char *wmesg, int flags,
 	struct sleepqueue_chain *sc;
 	struct sleepqueue *sq;
 	struct thread *td;
+#ifdef __rtems__
+	ISR_lock_Context lock_context;
+	Thread_Control *executing;
+	struct thread *succ;
+#endif /* __rtems__ */
 
 	td = curthread;
 	sc = SC_LOOKUP(wchan);
@@ -316,9 +339,11 @@ sleepq_add(void *wchan, struct lock_object *lock, const char *wmesg, int flags,
 	MPASS((queue >= 0) && (queue < NR_SLEEPQS));
 
 	/* If this thread is not allowed to sleep, die a horrible death. */
+#ifndef __rtems__
 	KASSERT(td->td_no_sleeping == 0,
 	    ("%s: td %p to sleep on wchan %p with sleeping prohibited",
 	    __func__, td, wchan));
+#endif /* __rtems__ */
 
 	/* Look up the sleep queue associated with the wait channel 'wchan'. */
 	sq = sleepq_lookup(wchan);
@@ -363,17 +388,41 @@ sleepq_add(void *wchan, struct lock_object *lock, const char *wmesg, int flags,
 		LIST_INSERT_HEAD(&sq->sq_free, td->td_sleepqueue, sq_hash);
 	}
 	thread_lock(td);
+#ifndef __rtems__
 	TAILQ_INSERT_TAIL(&sq->sq_blocked[queue], td, td_slpq);
+#else /* __rtems__ */
+	/* FIXME: This is broken with clustered scheduling */
+	succ = NULL;
+	TAILQ_FOREACH(succ, &sq->sq_blocked[queue], td_slpq) {
+		if (_Thread_Get_priority(td->td_thread) <
+		    _Thread_Get_priority(succ->td_thread))
+			break;
+	}
+	if (succ == NULL)
+		TAILQ_INSERT_TAIL(&sq->sq_blocked[queue], td, td_slpq);
+	else
+		TAILQ_INSERT_BEFORE(succ, td, td_slpq);
+#endif /* __rtems__ */
 	sq->sq_blockedcnt[queue]++;
+#ifdef __rtems__
+	executing = td->td_thread;
+	_Thread_Wait_acquire_default(executing, &lock_context);
+	td->td_sq_state = TD_SQ_TIRED;
+	executing->Wait.return_argument_second.immutable_object = wmesg;
+#endif /* __rtems__ */
 	td->td_sleepqueue = NULL;
 	td->td_sqqueue = queue;
 	td->td_wchan = wchan;
+#ifndef __rtems__
 	td->td_wmesg = wmesg;
 	if (flags & SLEEPQ_INTERRUPTIBLE) {
 		td->td_flags |= TDF_SINTR;
 		td->td_flags &= ~TDF_SLEEPABORT;
 	}
 	thread_unlock(td);
+#else /* __rtems__ */
+	_Thread_Wait_release_default(executing, &lock_context);
+#endif /* __rtems__ */
 }
 
 /*
@@ -384,6 +433,7 @@ void
 sleepq_set_timeout_sbt(void *wchan, sbintime_t sbt, sbintime_t pr,
     int flags)
 {
+#ifndef __rtems__
 	struct sleepqueue_chain *sc __unused;
 	struct thread *td;
 	sbintime_t pr1;
@@ -404,6 +454,47 @@ sleepq_set_timeout_sbt(void *wchan, sbintime_t sbt, sbintime_t pr,
 	callout_reset_sbt_on(&td->td_slpcallout, td->td_sleeptimo, pr1,
 	    sleepq_timeout, td, PCPU_GET(cpuid), flags | C_PRECALC |
 	    C_DIRECT_EXEC);
+#else /* __rtems__ */
+	Per_CPU_Control *cpu_self;
+	Thread_Control *executing;
+	ISR_lock_Context lock_context;
+	ISR_lock_Context lock_context_2;
+	Watchdog_Header *header;
+	sbintime_t sbt_per_tick;
+	uint64_t expire;
+
+	_ISR_lock_ISR_disable(&lock_context);
+	cpu_self = _Thread_Dispatch_disable_critical(&lock_context);
+	executing = _Per_CPU_Get_executing(cpu_self);
+	BSD_ASSERT(_Watchdog_Get_state(&executing->Timer.Watchdog) ==
+	    WATCHDOG_INACTIVE);
+
+	_ISR_lock_Acquire(&executing->Timer.Lock, &lock_context);
+
+	header = &cpu_self->Watchdog.Header[PER_CPU_WATCHDOG_TICKS];
+	executing->Timer.header = header;
+	executing->Timer.Watchdog.routine = sleepq_timeout;
+	_Watchdog_Set_CPU(&executing->Timer.Watchdog, cpu_self);
+
+	_Watchdog_Per_CPU_acquire_critical(cpu_self, &lock_context_2);
+	sbt_per_tick = rtems_bsd_sbt_per_watchdog_tick;
+
+	if ((flags & C_ABSOLUTE) != 0) {
+		/*
+		 * The FreeBSD uptime starts at one second, however, the
+		 * relative watchdog ticks start at zero, see also TIMESEL().
+		 */
+		expire = (sbt - SBT_1S + sbt_per_tick - 1) / sbt_per_tick;
+	} else {
+		expire = (sbt + sbt_per_tick - 1) / sbt_per_tick;
+		expire += cpu_self->Watchdog.ticks;
+	}
+
+	_Watchdog_Insert(header, &executing->Timer.Watchdog, expire);
+	_Watchdog_Per_CPU_release_critical(cpu_self, &lock_context_2);
+	_ISR_lock_Release_and_ISR_enable(&executing->Timer.Lock, &lock_context);
+	_Thread_Dispatch_direct(cpu_self);
+#endif /* __rtems__ */
 }
 
 /*
@@ -422,6 +513,7 @@ sleepq_sleepcnt(void *wchan, int queue)
 	return (sq->sq_blockedcnt[queue]);
 }
 
+#ifndef __rtems__
 /*
  * Marks the pending sleep of the current thread as interruptible and
  * makes an initial check for pending signals before putting a thread
@@ -549,6 +641,7 @@ out:
 	MPASS(td->td_lock != &sc->sc_lock);
 	return (ret);
 }
+#endif /* __rtems__ */
 
 /*
  * Switches to another thread if we are still asleep on a sleep queue.
@@ -557,6 +650,7 @@ out:
 static void
 sleepq_switch(void *wchan, int pri)
 {
+#ifndef __rtems__
 	struct sleepqueue_chain *sc;
 	struct sleepqueue *sq;
 	struct thread *td;
@@ -627,6 +721,97 @@ sleepq_switch(void *wchan, int pri)
 	KASSERT(TD_IS_RUNNING(td), ("running but not TDS_RUNNING"));
 	CTR3(KTR_PROC, "sleepq resume: thread %p (pid %ld, %s)",
 	    (void *)td, (long)td->td_proc->p_pid, (void *)td->td_name);
+#else /* __rtems__ */
+	Thread_Control *executing;
+	ISR_lock_Context lock_context;
+	struct thread *td;
+	bool block;
+	bool remove;
+
+	sleepq_release(wchan);
+
+	executing = _Thread_Wait_acquire_default_for_executing(&lock_context);
+	td = rtems_bsd_get_thread(executing);
+	BSD_ASSERT(td != NULL);
+
+	block = false;
+	remove = false;
+	switch (td->td_sq_state) {
+	case TD_SQ_TIRED:
+		BSD_ASSERT(td->td_wchan == wchan);
+		td->td_sq_state = TD_SQ_SLEEPY;
+		block = true;
+		break;
+	case TD_SQ_NIGHTMARE:
+		BSD_ASSERT(td->td_wchan == wchan);
+		td->td_sq_state = TD_SQ_PANIC;
+		remove = true;
+		break;
+	default:
+		BSD_ASSERT(td->td_wchan == NULL);
+		BSD_ASSERT(td->td_sq_state == TD_SQ_WAKEUP);
+		break;
+	}
+
+	if (block) {
+		Per_CPU_Control *cpu_self;
+		bool unblock;
+
+		cpu_self = _Thread_Dispatch_disable_critical(&lock_context);
+		_Thread_Wait_release_default(executing, &lock_context);
+
+		_Thread_Set_state(executing, STATES_WAITING_FOR_BSD_WAKEUP);
+
+		_Thread_Wait_acquire_default(executing, &lock_context);
+
+		unblock = false;
+		switch (td->td_sq_state) {
+		case TD_SQ_NIGHTMARE:
+			BSD_ASSERT(td->td_wchan == wchan);
+			td->td_sq_state = TD_SQ_PANIC;
+			unblock = true;
+			remove = true;
+			break;
+		case TD_SQ_WAKEUP:
+			BSD_ASSERT(td->td_wchan == NULL);
+			unblock = true;
+			break;
+		default:
+			BSD_ASSERT(td->td_wchan == wchan);
+			BSD_ASSERT(td->td_sq_state == TD_SQ_SLEEPY);
+			td->td_sq_state = TD_SQ_SLEEPING;
+			break;
+		}
+
+		_Thread_Wait_release_default(executing, &lock_context);
+
+		if (unblock) {
+			_Thread_Clear_state(executing, STATES_WAITING_FOR_BSD_WAKEUP);
+		}
+
+		_Thread_Dispatch_direct(cpu_self);
+		_Thread_Wait_acquire_default(executing, &lock_context);
+
+		switch (td->td_sq_state) {
+		case TD_SQ_NIGHTMARE:
+			BSD_ASSERT(td->td_wchan == wchan);
+			td->td_sq_state = TD_SQ_PANIC;
+			remove = true;
+			break;
+		default:
+			BSD_ASSERT(td->td_sq_state == TD_SQ_WAKEUP ||
+			    td->td_sq_state == TD_SQ_PANIC);
+			break;
+		}
+	}
+
+	_Thread_Wait_release_default(executing, &lock_context);
+	_Thread_Timer_remove(executing);
+
+	if (remove) {
+		sleepq_remove(td, wchan);
+	}
+#endif /* __rtems__ */
 }
 
 /*
@@ -639,6 +824,7 @@ sleepq_check_timeout(void)
 	int res;
 
 	td = curthread;
+#ifndef __rtems__
 	THREAD_LOCK_ASSERT(td, MA_OWNED);
 
 	/*
@@ -666,8 +852,13 @@ sleepq_check_timeout(void)
 		 */
 		callout_stop(&td->td_slpcallout);
 	return (res);
+#else /* __rtems__ */
+	(void)res;
+	return (td->td_sq_state);
+#endif /* __rtems__ */
 }
 
+#ifndef __rtems__
 /*
  * Check to see if we were awoken by a signal.
  */
@@ -690,6 +881,7 @@ sleepq_check_signals(void)
 
 	return (0);
 }
+#endif /* __rtems__ */
 
 /*
  * Block the current thread until it is awakened from its sleep queue.
@@ -697,15 +889,20 @@ sleepq_check_signals(void)
 void
 sleepq_wait(void *wchan, int pri)
 {
+#ifndef __rtems__
 	struct thread *td;
 
 	td = curthread;
 	MPASS(!(td->td_flags & TDF_SINTR));
 	thread_lock(td);
+#endif /* __rtems__ */
 	sleepq_switch(wchan, pri);
+#ifndef __rtems__
 	thread_unlock(td);
+#endif /* __rtems__ */
 }
 
+#ifndef __rtems__
 /*
  * Block the current thread until it is awakened from its sleep queue
  * or it is interrupted by a signal.
@@ -723,6 +920,7 @@ sleepq_wait_sig(void *wchan, int pri)
 		return (rcatch);
 	return (rval);
 }
+#endif /* __rtems__ */
 
 /*
  * Block the current thread until it is awakened from its sleep queue
@@ -731,19 +929,26 @@ sleepq_wait_sig(void *wchan, int pri)
 int
 sleepq_timedwait(void *wchan, int pri)
 {
+#ifndef __rtems__
 	struct thread *td;
+#endif /* __rtems__ */
 	int rval;
 
+#ifndef __rtems__
 	td = curthread;
 	MPASS(!(td->td_flags & TDF_SINTR));
 	thread_lock(td);
+#endif /* __rtems__ */
 	sleepq_switch(wchan, pri);
 	rval = sleepq_check_timeout();
+#ifndef __rtems__
 	thread_unlock(td);
+#endif /* __rtems__ */
 
 	return (rval);
 }
 
+#ifndef __rtems__
 /*
  * Block the current thread until it is awakened from its sleep queue,
  * it is interrupted by a signal, or it times out waiting to be awakened.
@@ -763,6 +968,7 @@ sleepq_timedwait_sig(void *wchan, int pri)
 		return (rvals);
 	return (rvalt);
 }
+#endif /* __rtems__ */
 
 /*
  * Returns the type of sleepqueue given a waitchannel.
@@ -794,6 +1000,13 @@ static int
 sleepq_resume_thread(struct sleepqueue *sq, struct thread *td, int pri)
 {
 	struct sleepqueue_chain *sc __unused;
+#ifdef __rtems__
+	Thread_Control *thread;
+	ISR_lock_Context lock_context;
+	bool unblock;
+
+	BSD_ASSERT(sq != NULL);
+#endif /* __rtems__ */
 
 	MPASS(td != NULL);
 	MPASS(sq->sq_wchan != NULL);
@@ -825,9 +1038,17 @@ sleepq_resume_thread(struct sleepqueue *sq, struct thread *td, int pri)
 	} else
 		td->td_sleepqueue = LIST_FIRST(&sq->sq_free);
 	LIST_REMOVE(td->td_sleepqueue, sq_hash);
+#ifdef __rtems__
+	thread = td->td_thread;
+	_ISR_lock_ISR_disable(&lock_context);
+	_Thread_Wait_acquire_default_critical(thread, &lock_context);
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 	td->td_wmesg = NULL;
+#endif /* __rtems__ */
 	td->td_wchan = NULL;
+#ifndef __rtems__
 	td->td_flags &= ~TDF_SINTR;
 
 	CTR3(KTR_PROC, "sleepq_wakeup: thread %p (pid %ld, %s)",
@@ -849,6 +1070,33 @@ sleepq_resume_thread(struct sleepqueue *sq, struct thread *td, int pri)
 		TD_CLR_SLEEPING(td);
 		return (setrunnable(td));
 	}
+#else /* __rtems__ */
+	unblock = false;
+	switch (td->td_sq_state) {
+	case TD_SQ_SLEEPING:
+		unblock = true;
+		/* FALLTHROUGH */
+	case TD_SQ_TIRED:
+	case TD_SQ_SLEEPY:
+	case TD_SQ_NIGHTMARE:
+		td->td_sq_state = TD_SQ_WAKEUP;
+		break;
+	default:
+		BSD_ASSERT(td->td_sq_state == TD_SQ_PANIC);
+		break;
+	}
+
+	if (unblock) {
+		Per_CPU_Control *cpu_self;
+
+		cpu_self = _Thread_Dispatch_disable_critical(&lock_context);
+		_Thread_Wait_release_default(thread, &lock_context);
+		_Thread_Clear_state(thread, STATES_WAITING_FOR_BSD_WAKEUP);
+		_Thread_Dispatch_direct(cpu_self);
+	} else {
+		_Thread_Wait_release_default(thread, &lock_context);
+	}
+#endif /* __rtems__ */
 	return (0);
 }
 
@@ -897,8 +1145,12 @@ sleepq_signal(void *wchan, int flags, int pri, int queue)
 {
 	struct sleepqueue_chain *sc;
 	struct sleepqueue *sq;
+#ifndef __rtems__
 	struct threadqueue *head;
 	struct thread *td, *besttd;
+#else /* __rtems__ */
+	struct thread *besttd;
+#endif /* __rtems__ */
 	int wakeup_swapper;
 
 	CTR2(KTR_PROC, "sleepq_signal(%p, %d)", wchan, flags);
@@ -910,6 +1162,7 @@ sleepq_signal(void *wchan, int flags, int pri, int queue)
 	KASSERT(sq->sq_type == (flags & SLEEPQ_TYPE),
 	    ("%s: mismatch between sleep/wakeup and cv_*", __func__));
 
+#ifndef __rtems__
 	head = &sq->sq_blocked[queue];
 	if (flags & SLEEPQ_UNFAIR) {
 		/*
@@ -938,6 +1191,9 @@ sleepq_signal(void *wchan, int flags, int pri, int queue)
 				besttd = td;
 		}
 	}
+#else /* __rtems__ */
+	besttd = TAILQ_FIRST(&sq->sq_blocked[queue]);
+#endif /* __rtems__ */
 	MPASS(besttd != NULL);
 	thread_lock(besttd);
 	wakeup_swapper = sleepq_resume_thread(sq, besttd, pri);
@@ -999,6 +1255,7 @@ sleepq_remove_matching(struct sleepqueue *sq, int queue,
 	return (wakeup_swapper);
 }
 
+#ifndef __rtems__
 /*
  * Time sleeping threads out.  When the timeout expires, the thread is
  * removed from the sleep queue and made runnable if it is still asleep.
@@ -1049,6 +1306,50 @@ sleepq_timeout(void *arg)
 	if (wakeup_swapper)
 		kick_proc0();
 }
+#else /* __rtems__ */
+static void
+sleepq_timeout(Watchdog_Control *watchdog)
+{
+	Thread_Control *thread;
+	struct thread *td;
+	ISR_lock_Context lock_context;
+	bool unblock;
+
+	thread = RTEMS_CONTAINER_OF(watchdog, Thread_Control, Timer.Watchdog);
+	td = rtems_bsd_get_thread(thread);
+	BSD_ASSERT(td != NULL);
+
+	_ISR_lock_ISR_disable(&lock_context);
+	_Thread_Wait_acquire_default_critical(thread, &lock_context);
+
+	unblock = false;
+	switch (td->td_sq_state) {
+	case TD_SQ_SLEEPING:
+		unblock = true;
+		/* Fall through */
+	case TD_SQ_TIRED:
+	case TD_SQ_SLEEPY:
+		td->td_sq_state = TD_SQ_NIGHTMARE;
+		break;
+	default:
+		BSD_ASSERT(td->td_sq_state == TD_SQ_WAKEUP);
+		break;
+	}
+
+	if (unblock) {
+		Per_CPU_Control *cpu_self;
+
+		cpu_self = _Thread_Dispatch_disable_critical(&lock_context);
+		_Thread_Wait_release_default(thread, &lock_context);
+
+		_Thread_Clear_state(thread, STATES_WAITING_FOR_BSD_WAKEUP);
+
+		_Thread_Dispatch_enable(cpu_self);
+	} else {
+		_Thread_Wait_release_default(thread, &lock_context);
+	}
+}
+#endif /* __rtems__ */
 
 /*
  * Resumes a specific thread from the sleep queue associated with a specific
@@ -1089,6 +1390,7 @@ sleepq_remove(struct thread *td, void *wchan)
 		kick_proc0();
 }
 
+#ifndef __rtems__
 /*
  * Abort a thread as if an interrupt had occurred.  Only abort
  * interruptible waits (unfortunately it isn't safe to abort others).
@@ -1130,6 +1432,7 @@ sleepq_abort(struct thread *td, int intrval)
 	/* Thread is asleep on sleep queue sq, so wake it up. */
 	return (sleepq_resume_thread(sq, td, 0));
 }
+#endif /* __rtems__ */
 
 void
 sleepq_chains_remove_matching(bool (*matches)(struct thread *))

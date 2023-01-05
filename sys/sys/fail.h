@@ -193,6 +193,7 @@ __END_DECLS
 /* Declare a fail_point and its sysctl in a function. */
 #define _FAIL_POINT_NAME(name) _fail_point_##name
 #define _FAIL_POINT_LOCATION() "(" __FILE__ ":" __XSTRING(__LINE__) ")"
+#ifndef __rtems__
 #define _FAIL_POINT_INIT(parent, name, flags) \
 	static struct fail_point _FAIL_POINT_NAME(name) = { \
 	        .fp_name = #name, \
@@ -222,6 +223,10 @@ __END_DECLS
 		code; \
  \
 	}
+#else /* __rtems__ */
+#define _FAIL_POINT_INIT(parent, name, flags) (void)0;
+#define _FAIL_POINT_EVAL(name, cond, code...) (void)0;
+#endif /* __rtems__ */
 
 
 /**

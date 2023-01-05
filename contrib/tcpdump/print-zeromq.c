@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2013 The TCPDUMP project
  * All rights reserved.
@@ -218,3 +222,6 @@ zmtp1_print_datagram(netdissect_options *ndo, const u_char *cp, const u_int len)
 	while (cp < ep)
 		cp = zmtp1_print_frame(ndo, cp, ep);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-zeromq-data.h"
+#endif /* __rtems__ */

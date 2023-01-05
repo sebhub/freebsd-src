@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (C) Arnaldo Carvalho de Melo 2004
  * Copyright (C) Ian McDonald 2005
@@ -696,3 +700,6 @@ trunc:
 	ND_PRINT((ndo, "%s", tstr));
 	return 0;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-dccp-data.h"
+#endif /* __rtems__ */

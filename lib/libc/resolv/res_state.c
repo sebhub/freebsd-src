@@ -101,8 +101,10 @@ __res_state(void)
 {
 	res_state statp;
 
+#ifndef __rtems__
 	if (thr_main() != 0)
 		return res_check_reload(&_res);
+#endif /* __rtems__ */
 
 	if (thr_once(&res_init_once, res_keycreate) != 0 ||
 	    !res_thr_keycreated)

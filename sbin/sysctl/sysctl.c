@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-sysctl-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -43,6 +47,12 @@ static const char rcsid[] =
   "$FreeBSD$";
 #endif /* not lint */
 
+#ifdef __rtems__
+#define __need_getopt_newlib
+#include <getopt.h>
+#include <machine/rtems-bsd-program.h>
+#include <machine/rtems-bsd-commands.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -57,7 +67,9 @@ static const char rcsid[] =
 #endif
 
 #if defined(__amd64__) || defined(__i386__)
+#ifndef __rtems__
 #include <machine/pc/bios.h>
+#endif /* __rtems__ */
 #endif
 
 #include <assert.h>
@@ -72,6 +84,9 @@ static const char rcsid[] =
 #include <string.h>
 #include <sysexits.h>
 #include <unistd.h>
+#ifdef __rtems__
+#include "rtems-bsd-sysctl-sysctl-data.h"
+#endif /* __rtems__ */
 
 static const char *conffile;
 
@@ -139,11 +154,43 @@ usage(void)
 	exit(1);
 }
 
+#ifdef __rtems__
+static int main(int argc, char *argv[]);
+
+RTEMS_LINKER_RWSET(bsd_prog_sysctl, char);
+
+int
+rtems_bsd_command_sysctl(int argc, char *argv[])
+{
+	int exit_code;
+	void *data_begin;
+	size_t data_size;
+
+	data_begin = RTEMS_LINKER_SET_BEGIN(bsd_prog_sysctl);
+	data_size = RTEMS_LINKER_SET_SIZE(bsd_prog_sysctl);
+
+	rtems_bsd_program_lock();
+	exit_code = rtems_bsd_program_call_main_with_data_restore("sysctl",
+	    main, argc, argv, data_begin, data_size);
+	rtems_bsd_program_unlock();
+
+	return exit_code;
+}
+#endif /* __rtems__ */
 int
 main(int argc, char **argv)
 {
 	int ch;
 	int warncount = 0;
+#ifdef __rtems__
+	struct getopt_data getopt_data;
+	memset(&getopt_data, 0, sizeof(getopt_data));
+#define optind getopt_data.optind
+#define optarg getopt_data.optarg
+#define opterr getopt_data.opterr
+#define optopt getopt_data.optopt
+#define getopt(argc, argv, opt) getopt_r(argc, argv, "+" opt, &getopt_data)
+#endif /* __rtems__ */
 
 	setlocale(LC_NUMERIC, "");
 	setbuf(stdout,0);
@@ -593,6 +640,7 @@ parsefile(const char *filename)
 
 /* These functions will dump out various interesting structures. */
 
+#ifndef __rtems__
 static int
 S_clockinfo(size_t l2, void *p)
 {
@@ -607,6 +655,7 @@ S_clockinfo(size_t l2, void *p)
 		ci->hz, ci->tick, ci->profhz, ci->stathz);
 	return (0);
 }
+#endif /* __rtems__ */
 
 static int
 S_loadavg(size_t l2, void *p)
@@ -783,6 +832,7 @@ S_efi_map(size_t l2, void *p)
 #endif
 
 #if defined(__amd64__) || defined(__i386__)
+#ifndef __rtems__
 static int
 S_bios_smap_xattr(size_t l2, void *p)
 {
@@ -801,6 +851,7 @@ S_bios_smap_xattr(size_t l2, void *p)
 		    (uintmax_t)smap->length);
 	return (0);
 }
+#endif /* __rtems__ */
 #endif
 
 static int
@@ -993,7 +1044,11 @@ show_var(int *oid, int nlen)
 	/* don't fetch opaques that we don't know how to print */
 	if (ctltype == CTLTYPE_OPAQUE) {
 		if (strcmp(fmt, "S,clockinfo") == 0)
+#ifndef __rtems__
 			func = S_clockinfo;
+#else /* __rtems__ */
+			func = NULL;
+#endif /* __rtems__ */
 		else if (strcmp(fmt, "S,timeval") == 0)
 			func = S_timeval;
 		else if (strcmp(fmt, "S,loadavg") == 0)
@@ -1008,7 +1063,11 @@ show_var(int *oid, int nlen)
 #endif
 #if defined(__amd64__) || defined(__i386__)
 		else if (strcmp(fmt, "S,bios_smap_xattr") == 0)
+#ifndef __rtems__
 			func = S_bios_smap_xattr;
+#else /* __rtems__ */
+			func = NULL;
+#endif /* __rtems__ */
 #endif
 		else {
 			func = NULL;

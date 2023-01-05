@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-openssl-namespace.h"
+#endif /* __rtems__ */
+
 /*
  * Copyright 2001-2019 The OpenSSL Project Authors. All Rights Reserved.
  *
@@ -51,7 +56,7 @@ NON_EMPTY_TRANSLATION_UNIT
 #endif
 
 # if !defined(NO_FORK) && !defined(OPENSSL_NO_SOCK) \
-     && !defined(OPENSSL_NO_POSIX_IO)
+     && !defined(OPENSSL_NO_POSIX_IO) && !defined(__rtems__)
 #  define OCSP_DAEMON
 #  include <sys/types.h>
 #  include <sys/wait.h>
@@ -1626,3 +1631,6 @@ OCSP_RESPONSE *process_responder(OCSP_REQUEST *req,
 # endif
 
 #endif
+#ifdef __rtems__
+#include "rtems-bsd-openssl-ocsp-data.h"
+#endif /* __rtems__ */

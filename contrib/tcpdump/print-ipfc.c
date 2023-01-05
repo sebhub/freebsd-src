@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1991, 1992, 1993, 1994, 1995, 1996, 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -143,3 +147,6 @@ ipfc_if_print(netdissect_options *ndo, const struct pcap_pkthdr *h, register con
 {
 	return (ipfc_print(ndo, p, h->len, h->caplen));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-ipfc-data.h"
+#endif /* __rtems__ */

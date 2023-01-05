@@ -159,7 +159,9 @@ struct iflib_ctx {
 	device_t ifc_dev;
 	if_t ifc_ifp;
 
+#ifndef __rtems__
 	cpuset_t ifc_cpus;
+#endif /* __rtems__ */
 	if_shared_ctx_t ifc_sctx;
 	struct if_softc_ctx ifc_softc_ctx;
 
@@ -708,7 +710,6 @@ static int iflib_altq_if_transmit(if_t ifp, struct mbuf *m);
 #endif
 static int iflib_register(if_ctx_t);
 static void iflib_deregister(if_ctx_t);
-static void iflib_unregister_vlan_handlers(if_ctx_t ctx);
 static void iflib_init_locked(if_ctx_t ctx);
 static void iflib_add_device_sysctl_pre(if_ctx_t ctx);
 static void iflib_add_device_sysctl_post(if_ctx_t ctx);
@@ -1278,6 +1279,7 @@ prefetch2cachelines(void *x)
 #define prefetch2cachelines(x)
 #endif
 
+#ifndef __rtems__
 static void
 iflib_gen_mac(if_ctx_t ctx)
 {
@@ -1309,6 +1311,7 @@ iflib_gen_mac(if_ctx_t ctx)
 	mac[4] = digest[1];
 	mac[5] = digest[2];
 }
+#endif /* __rtems__ */
 
 static void
 iru_init(if_rxd_update_t iru, iflib_rxq_t rxq, uint8_t flid)
@@ -1735,16 +1738,20 @@ iflib_txsd_destroy(if_ctx_t ctx, iflib_txq_t txq, int i)
 {
 	bus_dmamap_t map;
 
-	if (txq->ift_sds.ifsd_map != NULL) {
+	map = NULL;
+	if (txq->ift_sds.ifsd_map != NULL)
 		map = txq->ift_sds.ifsd_map[i];
+	if (map != NULL) {
 		bus_dmamap_sync(txq->ift_buf_tag, map, BUS_DMASYNC_POSTWRITE);
 		bus_dmamap_unload(txq->ift_buf_tag, map);
 		bus_dmamap_destroy(txq->ift_buf_tag, map);
 		txq->ift_sds.ifsd_map[i] = NULL;
 	}
 
-	if (txq->ift_sds.ifsd_tso_map != NULL) {
+	map = NULL;
+	if (txq->ift_sds.ifsd_tso_map != NULL)
 		map = txq->ift_sds.ifsd_tso_map[i];
+	if (map != NULL) {
 		bus_dmamap_sync(txq->ift_tso_buf_tag, map,
 		    BUS_DMASYNC_POSTWRITE);
 		bus_dmamap_unload(txq->ift_tso_buf_tag, map);
@@ -1760,14 +1767,6 @@ iflib_txq_destroy(iflib_txq_t txq)
 
 	for (int i = 0; i < txq->ift_size; i++)
 		iflib_txsd_destroy(ctx, txq, i);
-
-	if (txq->ift_br != NULL) {
-		ifmp_ring_free(txq->ift_br);
-		txq->ift_br = NULL;
-	}
-
-	mtx_destroy(&txq->ift_mtx);
-
 	if (txq->ift_sds.ifsd_map != NULL) {
 		free(txq->ift_sds.ifsd_map, M_IFLIB);
 		txq->ift_sds.ifsd_map = NULL;
@@ -1787,9 +1786,6 @@ iflib_txq_destroy(iflib_txq_t txq)
 	if (txq->ift_tso_buf_tag != NULL) {
 		bus_dma_tag_destroy(txq->ift_tso_buf_tag);
 		txq->ift_tso_buf_tag = NULL;
-	}
-	if (txq->ift_ifdi != NULL) {
-		free(txq->ift_ifdi, M_IFLIB);
 	}
 }
 
@@ -2154,6 +2150,9 @@ iflib_fl_bufs_free(iflib_fl_t fl)
 			bus_dmamap_unload(fl->ifl_buf_tag, sd_map);
 			if (*sd_cl != NULL)
 				uma_zfree(fl->ifl_zone, *sd_cl);
+			// XXX: Should this get moved out?
+			if (iflib_in_detach(fl->ifl_rxq->ifr_ctx))
+				bus_dmamap_destroy(fl->ifl_buf_tag, sd_map);
 			if (*sd_m != NULL) {
 				m_init(*sd_m, M_NOWAIT, MT_DATA, 0);
 				uma_zfree(zone_mbuf, *sd_m);
@@ -2241,14 +2240,14 @@ iflib_rx_sds_free(iflib_rxq_t rxq)
 			if (fl->ifl_buf_tag != NULL) {
 				if (fl->ifl_sds.ifsd_map != NULL) {
 					for (j = 0; j < fl->ifl_size; j++) {
+						if (fl->ifl_sds.ifsd_map[j] ==
+						    NULL)
+							continue;
 						bus_dmamap_sync(
 						    fl->ifl_buf_tag,
 						    fl->ifl_sds.ifsd_map[j],
 						    BUS_DMASYNC_POSTREAD);
 						bus_dmamap_unload(
-						    fl->ifl_buf_tag,
-						    fl->ifl_sds.ifsd_map[j]);
-						bus_dmamap_destroy(
 						    fl->ifl_buf_tag,
 						    fl->ifl_sds.ifsd_map[j]);
 					}
@@ -2267,8 +2266,6 @@ iflib_rx_sds_free(iflib_rxq_t rxq)
 		}
 		free(rxq->ifr_fl, M_IFLIB);
 		rxq->ifr_fl = NULL;
-		free(rxq->ifr_ifdi, M_IFLIB);
-		rxq->ifr_ifdi = NULL;
 		rxq->ifr_cq_cidx = 0;
 	}
 }
@@ -2301,11 +2298,8 @@ iflib_timer(void *arg)
 		     (sctx->isc_pause_frames == 0)))
 			goto hung;
 
-		if (txq->ift_qstatus != IFLIB_QUEUE_IDLE &&
-		    ifmp_ring_is_stalled(txq->ift_br)) {
-			KASSERT(ctx->ifc_link_state == LINK_STATE_UP, ("queue can't be marked as hung if interface is down"));
+		if (ifmp_ring_is_stalled(txq->ift_br))
 			txq->ift_qstatus = IFLIB_QUEUE_HUNG;
-		}
 		txq->ift_cleaned_prev = txq->ift_cleaned;
 	}
 #ifdef DEV_NETMAP
@@ -4270,9 +4264,6 @@ iflib_vlan_register(void *arg, if_t ifp, uint16_t vtag)
 	if ((vtag == 0) || (vtag > 4095))
 		return;
 
-	if (iflib_in_detach(ctx))
-		return;
-
 	CTX_LOCK(ctx);
 	IFDI_VLAN_REGISTER(ctx, vtag);
 	/* Re-init to load the changes */
@@ -4459,6 +4450,7 @@ get_ctx_core_offset(if_ctx_t ctx)
 		qc = max(scctx->isc_ntxqsets, scctx->isc_nrxqsets);
 
 	mtx_lock(&cpu_offset_mtx);
+#ifndef __rtems__
 	SLIST_FOREACH(op, &cpu_offsets, entries) {
 		if (CPU_CMP(&ctx->ifc_cpus, &op->set) == 0) {
 			ret = op->offset;
@@ -4468,6 +4460,7 @@ get_ctx_core_offset(if_ctx_t ctx)
 			break;
 		}
 	}
+#endif /* __rtems__ */
 	if (ret == CORE_OFFSET_UNSPECIFIED) {
 		ret = 0;
 		op = malloc(sizeof(struct cpu_offset), M_IFLIB,
@@ -4478,7 +4471,9 @@ get_ctx_core_offset(if_ctx_t ctx)
 		} else {
 			op->offset = qc;
 			op->refcount = 1;
+#ifndef __rtems__
 			CPU_COPY(&ctx->ifc_cpus, &op->set);
+#endif /* __rtems__ */
 			SLIST_INSERT_HEAD(&cpu_offsets, op, entries);
 		}
 	}
@@ -4494,7 +4489,11 @@ unref_ctx_core_offset(if_ctx_t ctx)
 
 	mtx_lock(&cpu_offset_mtx);
 	SLIST_FOREACH_SAFE(op, &cpu_offsets, entries, top) {
+#ifndef __rtems__
 		if (CPU_CMP(&ctx->ifc_cpus, &op->set) == 0) {
+#else /* __rtems__ */
+		{
+#endif /* __rtems__ */
 			MPASS(op->refcount > 0);
 			op->refcount--;
 			if (op->refcount == 0) {
@@ -4605,12 +4604,14 @@ iflib_device_register(device_t dev, void *sc, if_shared_ctx_t sctx, if_ctx_t *ct
 	taskqgroup_attach(qgroup_if_config_tqg, &ctx->ifc_admin_task, ctx,
 	    -1, "admin");
 
+#ifndef __rtems__
 	/* Set up cpu set.  If it fails, use the set of all CPUs. */
 	if (bus_get_cpus(dev, INTR_CPUS, sizeof(ctx->ifc_cpus), &ctx->ifc_cpus) != 0) {
 		device_printf(dev, "Unable to fetch CPU list\n");
 		CPU_COPY(&all_cpus, &ctx->ifc_cpus);
 	}
 	MPASS(CPU_COUNT(&ctx->ifc_cpus) > 0);
+#endif /* __rtems__ */
 
 	/*
 	** Now set up MSI or MSI-X, should return us the number of supported
@@ -4961,9 +4962,6 @@ iflib_pseudo_deregister(if_ctx_t ctx)
 	struct taskqgroup *tqg;
 	iflib_fl_t fl;
 
-	/* Unregister VLAN event handlers early */
-	iflib_unregister_vlan_handlers(ctx);
-
 	ether_ifdetach(ifp);
 	/* XXX drain any dependent tasks */
 	tqg = qgroup_if_io_tqg;
@@ -5037,16 +5035,18 @@ iflib_device_deregister(if_ctx_t ctx)
 	ctx->ifc_flags |= IFC_IN_DETACH;
 	STATE_UNLOCK(ctx);
 
-	/* Unregister VLAN handlers before calling iflib_stop() */
-	iflib_unregister_vlan_handlers(ctx);
-
-	iflib_netmap_detach(ifp);
-	ether_ifdetach(ifp);
-
 	CTX_LOCK(ctx);
 	iflib_stop(ctx);
 	CTX_UNLOCK(ctx);
 
+	/* Unregister VLAN events */
+	if (ctx->ifc_vlan_attach_event != NULL)
+		EVENTHANDLER_DEREGISTER(vlan_config, ctx->ifc_vlan_attach_event);
+	if (ctx->ifc_vlan_detach_event != NULL)
+		EVENTHANDLER_DEREGISTER(vlan_unconfig, ctx->ifc_vlan_detach_event);
+
+	iflib_netmap_detach(ifp);
+	ether_ifdetach(ifp);
 	if (ctx->ifc_led_dev != NULL)
 		led_destroy(ctx->ifc_led_dev);
 	/* XXX drain any dependent tasks */
@@ -5333,8 +5333,13 @@ iflib_register(if_ctx_t ctx)
 }
 
 static void
-iflib_unregister_vlan_handlers(if_ctx_t ctx)
+iflib_deregister(if_ctx_t ctx)
 {
+	if_t ifp = ctx->ifc_ifp;
+
+	/* Remove all media */
+	ifmedia_removeall(&ctx->ifc_media);
+
 	/* Unregister VLAN events */
 	if (ctx->ifc_vlan_attach_event != NULL) {
 		EVENTHANDLER_DEREGISTER(vlan_config, ctx->ifc_vlan_attach_event);
@@ -5344,19 +5349,6 @@ iflib_unregister_vlan_handlers(if_ctx_t ctx)
 		EVENTHANDLER_DEREGISTER(vlan_unconfig, ctx->ifc_vlan_detach_event);
 		ctx->ifc_vlan_detach_event = NULL;
 	}
-
-}
-
-static void
-iflib_deregister(if_ctx_t ctx)
-{
-	if_t ifp = ctx->ifc_ifp;
-
-	/* Remove all media */
-	ifmedia_removeall(&ctx->ifc_media);
-
-	/* Ensure that VLAN event handlers are unregistered */
-	iflib_unregister_vlan_handlers(ctx);
 
 	/* Release kobject reference */
 	kobj_delete((kobj_t) ctx, NULL);
@@ -5447,7 +5439,9 @@ iflib_queues_alloc(if_ctx_t ctx)
 			txq->ift_br_offset = 0;
 		}
 		/* XXX fix this */
+#ifndef __rtems__
 		txq->ift_timer.c_cpu = cpu;
+#endif /* __rtems__ */
 
 		if (iflib_txsd_alloc(txq)) {
 			device_printf(dev, "Critical Failure setting up TX buffers\n");
@@ -5608,9 +5602,9 @@ iflib_tx_structures_free(if_ctx_t ctx)
 	int i, j;
 
 	for (i = 0; i < NTXQSETS(ctx); i++, txq++) {
+		iflib_txq_destroy(txq);
 		for (j = 0; j < sctx->isc_ntxqs; j++)
 			iflib_dma_free(&txq->ift_ifdi[j]);
-		iflib_txq_destroy(txq);
 	}
 	free(ctx->ifc_txqs, M_IFLIB);
 	ctx->ifc_txqs = NULL;
@@ -5672,12 +5666,9 @@ static void
 iflib_rx_structures_free(if_ctx_t ctx)
 {
 	iflib_rxq_t rxq = ctx->ifc_rxqs;
-	if_shared_ctx_t sctx = ctx->ifc_sctx;
-	int i, j;
+	int i;
 
 	for (i = 0; i < ctx->ifc_softc_ctx.isc_nrxqsets; i++, rxq++) {
-		for (j = 0; j < sctx->isc_nrxqs; j++)
-			iflib_dma_free(&rxq->ifr_ifdi[j]);
 		iflib_rx_sds_free(rxq);
 #if defined(INET6) || defined(INET)
 		if (if_getcapabilities(ctx->ifc_ifp) & IFCAP_LRO)
@@ -6028,7 +6019,6 @@ iflib_legacy_setup(if_ctx_t ctx, driver_filter_t filter, void *filter_arg, int *
 	int tqrid;
 	void *q;
 	int err;
-	bool rx_only;
 
 	q = &ctx->ifc_rxqs[0];
 	info = &rxq[0].ifr_filter_info;
@@ -6036,18 +6026,16 @@ iflib_legacy_setup(if_ctx_t ctx, driver_filter_t filter, void *filter_arg, int *
 	tqg = qgroup_if_io_tqg;
 	tqrid = irq->ii_rid = *rid;
 	fn = _task_fn_rx;
-	rx_only = (ctx->ifc_sctx->isc_flags & IFLIB_SINGLE_IRQ_RX_ONLY) != 0;
 
 	ctx->ifc_flags |= IFC_LEGACY;
 	info->ifi_filter = filter;
 	info->ifi_filter_arg = filter_arg;
 	info->ifi_task = gtask;
-	info->ifi_ctx = rx_only ? ctx : q;
+	info->ifi_ctx = q;
 
 	/* We allocate a single interrupt resource */
-	err = _iflib_irq_alloc(ctx, irq, tqrid, rx_only ? iflib_fast_intr_ctx :
-	    iflib_fast_intr_rxtx, NULL, info, name);
-	if (err != 0)
+	if ((err = _iflib_irq_alloc(ctx, irq, tqrid, iflib_fast_intr_rxtx,
+	    NULL, info, name)) != 0)
 		return (err);
 	GROUPTASK_INIT(gtask, 0, fn, q);
 	taskqgroup_attach(tqg, gtask, q, rman_get_start(irq->ii_res), name);
@@ -6259,11 +6247,19 @@ iflib_msix_init(if_ctx_t ctx)
 #else
 	queues = queuemsgs;
 #endif
+#ifndef __rtems__
 	queues = imin(CPU_COUNT(&ctx->ifc_cpus), queues);
+#else /* __rtems__ */
+	queues = imin(1, queues);
+#endif /* __rtems__ */
 	if (bootverbose)
 		device_printf(dev,
 		    "intr CPUs: %d queue msgs: %d admincnt: %d\n",
+#ifndef __rtems__
 		    CPU_COUNT(&ctx->ifc_cpus), queuemsgs, admincnt);
+#else /* __rtems__ */
+		    1, queuemsgs, admincnt);
+#endif /* __rtems__ */
 #ifdef  RSS
 	/* If we're doing RSS, clamp at the number of RSS buckets */
 	if (queues > rss_getnumbuckets())

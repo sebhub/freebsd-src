@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (C) 2001 WIDE Project.
  * All rights reserved.
@@ -593,3 +597,6 @@ lwres_print(netdissect_options *ndo,
   trunc:
 	ND_PRINT((ndo, "[|lwres]"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-lwres-data.h"
+#endif /* __rtems__ */

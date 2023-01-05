@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ping6-namespace.h"
+#endif /* __rtems__ */
+
 /*	$KAME: ping6.c,v 1.169 2003/07/25 06:01:47 itojun Exp $	*/
 
 /*-
@@ -65,6 +69,7 @@
  * SUCH DAMAGE.
  */
 
+#if defined(__rtems__) && defined(INET6)
 #if 0
 #ifndef lint
 static const char copyright[] =
@@ -103,6 +108,13 @@ __FBSDID("$FreeBSD$");
  * network attached to 1 or more interfaces)
  */
 
+#ifdef __rtems__
+#define __need_getopt_newlib
+#include <getopt.h>
+#include <machine/rtems-bsd-program.h>
+#include <machine/rtems-bsd-commands.h>
+#include <rtems/libio_.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/capsicum.h>
 #include <sys/uio.h>
@@ -141,6 +153,9 @@ __FBSDID("$FreeBSD$");
 #endif
 
 #include <md5.h>
+#ifdef __rtems__
+#include "rtems-bsd-ping6-ping6-data.h"
+#endif /* __rtems__ */
 
 struct tv32 {
 	u_int32_t tv32_sec;
@@ -262,13 +277,17 @@ static volatile sig_atomic_t seenint;
 static volatile sig_atomic_t seeninfo;
 #endif
 
+#ifndef __rtems__
 int	 main(int, char *[]);
+#endif /* __rtems__ */
 static cap_channel_t *capdns_setup(void);
 static void	 fill(char *, char *);
 static int	 get_hoplim(struct msghdr *);
 static int	 get_pathmtu(struct msghdr *);
 static struct in6_pktinfo *get_rcvpktinfo(struct msghdr *);
+#ifndef __rtems__
 static void	 onsignal(int);
+#endif /* __rtems__ */
 static void	 onint(int);
 static size_t	 pingerlen(void);
 static int	 pinger(void);
@@ -288,17 +307,49 @@ static void	 pr_rthdr(void *, size_t);
 static int	 pr_bitrange(u_int32_t, int, int);
 static void	 pr_retip(struct ip6_hdr *, u_char *);
 static void	 summary(void);
+#ifdef IPSEC
+#ifdef IPSEC_POLICY_IPSEC
 static int	 setpolicy(int, char *);
+#endif
+#endif
 static char	*nigroup(char *, int);
 static void	 usage(void);
 
+#ifdef __rtems__
+#define	USE_RFC2292BIS
+#endif /* __rtems__ */
+#ifdef __rtems__
+static int main(int argc, char *argv[]);
+
+RTEMS_LINKER_RWSET(bsd_prog_ping6, char);
+
+int
+rtems_bsd_command_ping6(int argc, char *argv[])
+{
+	int exit_code;
+	void *data_begin;
+	size_t data_size;
+
+	data_begin = RTEMS_LINKER_SET_BEGIN(bsd_prog_ping6);
+	data_size = RTEMS_LINKER_SET_SIZE(bsd_prog_ping6);
+
+	rtems_bsd_program_lock();
+	exit_code = rtems_bsd_program_call_main_with_data_restore("ping6",
+	    main, argc, argv, data_begin, data_size);
+	rtems_bsd_program_unlock();
+
+	return exit_code;
+}
+#endif /* __rtems__ */
 int
 main(int argc, char *argv[])
 {
 	struct timespec last, intvl;
 	struct sockaddr_in6 from, *sin6;
 	struct addrinfo hints, *res;
+#ifndef __rtems__
 	struct sigaction si_sa;
+#endif /* __rtems__ */
 	int cc, i;
 	int almost_done, ch, hold, packlen, preload, optval, error;
 	int nig_oldmcprefix = -1;
@@ -307,7 +358,11 @@ main(int argc, char *argv[])
 	int ip6optlen = 0;
 	struct cmsghdr *scmsgp = NULL;
 	/* For control (ancillary) data received from recvmsg() */
+#ifndef __rtems__
 	u_char cm[CONTROLLEN];
+#else /* __rtems__ */
+	static u_char cm[CONTROLLEN];
+#endif /* __rtems__ */
 #if defined(SO_SNDBUF) && defined(SO_RCVBUF)
 	u_long lsockbufsize;
 	int sockbufsize = 0;
@@ -321,7 +376,9 @@ main(int argc, char *argv[])
 	char *policy_out = NULL;
 #endif
 	double t;
+#ifndef __rtems__
 	u_long alarmtimeout;
+#endif /* __rtems__ */
 	size_t rthlen;
 #ifdef IPV6_USE_MIN_MTU
 	int mflag = 0;
@@ -329,6 +386,15 @@ main(int argc, char *argv[])
 	cap_rights_t rights_srecv;
 	cap_rights_t rights_ssend;
 	cap_rights_t rights_stdin;
+#ifdef __rtems__
+	struct getopt_data getopt_data;
+	memset(&getopt_data, 0, sizeof(getopt_data));
+#define optind getopt_data.optind
+#define optarg getopt_data.optarg
+#define opterr getopt_data.opterr
+#define optopt getopt_data.optopt
+#define getopt(argc, argv, opt) getopt_r(argc, argv, "+" opt, &getopt_data)
+#endif /* __rtems__ */
 
 	/* just to be sure */
 	memset(&smsghdr, 0, sizeof(smsghdr));
@@ -338,7 +404,9 @@ main(int argc, char *argv[])
 	intvl.tv_sec = interval / 1000;
 	intvl.tv_nsec = interval % 1000 * 1000000;
 
+#ifndef __rtems__
 	alarmtimeout = preload = 0;
+#endif /* __rtems__ */
 	datap = &outpack[ICMP6ECHOLEN + ICMP6ECHOTMLEN];
 	capdns = capdns_setup();
 #ifndef IPSEC
@@ -566,6 +634,7 @@ main(int argc, char *argv[])
 			options |= F_WAITTIME;
 			waittime = (int)t;
 			break;
+#ifndef __rtems__
 		case 'X':
 			alarmtimeout = strtoul(optarg, &e, 0);
 			if ((alarmtimeout < 1) || (alarmtimeout == ULONG_MAX))
@@ -576,6 +645,7 @@ main(int argc, char *argv[])
 				    optarg, MAXALARM);
 			alarm((int)alarmtimeout);
 			break;
+#endif /* __rtems__ */
 #ifdef IPSEC
 #ifdef IPSEC_POLICY_IPSEC
 		case 'P':
@@ -1112,6 +1182,7 @@ main(int argc, char *argv[])
 	}
 	clock_gettime(CLOCK_MONOTONIC, &last);
 
+#ifndef __rtems__
 	sigemptyset(&si_sa.sa_mask);
 	si_sa.sa_flags = 0;
 	si_sa.sa_handler = onsignal;
@@ -1127,6 +1198,7 @@ main(int argc, char *argv[])
 		if (sigaction(SIGALRM, &si_sa, 0) == -1)
 			err(EX_OSERR, "sigaction SIGALRM");
 	}
+#endif /* __rtems__ */
 	if (options & F_FLOOD) {
 		intvl.tv_sec = 0;
 		intvl.tv_nsec = 10000000;
@@ -1137,7 +1209,13 @@ main(int argc, char *argv[])
 		struct timespec now, timeout;
 		struct msghdr m;
 		struct iovec iov[2];
+#ifndef __rtems__
 		fd_set rfds;
+#else /* __rtems__ */
+		fd_set big_enough_rfds[howmany(rtems_libio_number_iops,
+		    sizeof(fd_set) * 8)];
+#define	rfds (*(fd_set *)(&big_enough_rfds[0]))
+#endif /* __rtems__ */
 		int n;
 
 		/* signal handling */
@@ -1150,7 +1228,11 @@ main(int argc, char *argv[])
 			continue;
 		}
 #endif
+#ifndef __rtems__
 		FD_ZERO(&rfds);
+#else /* __rtems__ */
+		memset(big_enough_rfds, 0, sizeof(big_enough_rfds));
+#endif /* __rtems__ */
 		FD_SET(srecv, &rfds);
 		clock_gettime(CLOCK_MONOTONIC, &now);
 		timespecadd(&last, &intvl, &timeout);
@@ -1238,11 +1320,13 @@ main(int argc, char *argv[])
 			}
 		}
 	}
+#ifndef __rtems__
 	sigemptyset(&si_sa.sa_mask);
 	si_sa.sa_flags = 0;
 	si_sa.sa_handler = SIG_IGN;
 	sigaction(SIGINT, &si_sa, 0);
 	sigaction(SIGALRM, &si_sa, 0);
+#endif /* __rtems__ */
 	summary();
 
         if(packet != NULL)
@@ -1251,6 +1335,7 @@ main(int argc, char *argv[])
 	exit(nreceived == 0 ? 2 : 0);
 }
 
+#ifndef __rtems__
 static void
 onsignal(int sig)
 {
@@ -1267,6 +1352,7 @@ onsignal(int sig)
 #endif
 	}
 }
+#endif /* __rtems__ */
 
 /*
  * pinger --
@@ -2618,7 +2704,9 @@ pr_retip(struct ip6_hdr *ip6, u_char *end)
 	nh = ip6->ip6_nxt;
 	cp += hlen;
 	while (end - cp >= 8) {
+#ifdef IPSEC
 		struct ah ah;
+#endif
 
 		switch (nh) {
 		case IPPROTO_HOPOPTS:
@@ -2693,7 +2781,11 @@ fill(char *bp, char *patp)
 	char *cp;
 
 	for (cp = patp; *cp; cp++)
+#ifndef __rtems__
 		if (!isxdigit(*cp))
+#else /* __rtems__ */
+		if (!isxdigit((unsigned char)*cp))
+#endif /* __rtems__ */
 			errx(1, "patterns must be specified as hex digits");
 	ii = sscanf(patp,
 	    "%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x",
@@ -2854,3 +2946,4 @@ capdns_setup(void)
 #endif
 	return (capdnsloc);
 }
+#endif /* defined(__rtems__) && defined(INET6) */

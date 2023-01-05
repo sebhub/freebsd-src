@@ -73,6 +73,10 @@
 #ifdef _KERNEL
 #include <machine/cpu.h>
 #endif
+#ifdef __rtems__
+#include <rtems/score/thread.h>
+#include <sys/epoch.h>
+#endif /* __rtems__ */
 
 /*
  * One structure allocated per session.
@@ -214,6 +218,18 @@ struct rusage_ext {
 	uint64_t	rux_su;         /* (c) Previous sys time in usec. */
 	uint64_t	rux_tu;         /* (c) Previous total time in usec. */
 };
+#ifdef __rtems__
+#include <errno.h>
+
+enum thread_sq_states {
+	TD_SQ_WAKEUP,
+	TD_SQ_PANIC = EWOULDBLOCK,
+	TD_SQ_TIRED,
+	TD_SQ_SLEEPY,
+	TD_SQ_SLEEPING,
+	TD_SQ_NIGHTMARE
+};
+#endif /* __rtems__ */
 
 /*
  * Kernel runnable context (thread).
@@ -221,21 +237,37 @@ struct rusage_ext {
  * Thread context.  Processes may have multiple threads.
  */
 struct thread {
+#ifdef __rtems__
+	Thread_Control *td_thread;
+	struct rtems_bsd_program_control *td_prog_ctrl;
+	struct epoch_tracker td_et[1];	/* (k) compat KPI spare tracker */
+#endif /* __rtems__ */
+#ifndef __rtems__
 	struct mtx	*volatile td_lock; /* replaces sched lock */
+#endif /* __rtems__ */
 	struct proc	*td_proc;	/* (*) Associated process. */
+#ifndef __rtems__
 	TAILQ_ENTRY(thread) td_plist;	/* (*) All threads in this proc. */
 	TAILQ_ENTRY(thread) td_runq;	/* (t) Run queue. */
+#endif /* __rtems__ */
 	TAILQ_ENTRY(thread) td_slpq;	/* (t) Sleep queue. */
+#ifndef __rtems__
 	TAILQ_ENTRY(thread) td_lockq;	/* (t) Lock queue. */
 	LIST_ENTRY(thread) td_hash;	/* (d) Hash chain. */
 	struct cpuset	*td_cpuset;	/* (t) CPU affinity mask. */
 	struct domainset_ref td_domain;	/* (a) NUMA policy */
+#endif /* __rtems__ */
 	struct seltd	*td_sel;	/* Select queue/channel. */
 	struct sleepqueue *td_sleepqueue; /* (k) Associated sleep queue. */
+#ifndef __rtems__
 	struct turnstile *td_turnstile;	/* (k) Associated turnstile. */
 	struct rl_q_entry *td_rlqe;	/* (k) Associated range lock entry. */
 	struct umtx_q   *td_umtxq;	/* (c?) Link for when we're blocked. */
 	lwpid_t		td_tid;		/* (b) Thread ID. */
+#else /* __rtems__ */
+        #define td_tid td_thread->Object.id
+#endif /* __rtems__ */
+#ifndef __rtems__
 	sigqueue_t	td_sigqueue;	/* (c) Sigs arrived, not delivered. */
 #define	td_siglist	td_sigqueue.sq_signals
 	u_char		td_lend_user_pri; /* (t) Lend user pri. */
@@ -245,17 +277,26 @@ struct thread {
 	u_char		td_epochnest;	/* (k) Epoch nest counter. */
 	int		td_flags;	/* (t) TDF_* flags. */
 	int		td_inhibitors;	/* (t) Why can not run. */
+#endif /* __rtems__ */
 	int		td_pflags;	/* (k) Private thread (TDP_*) flags. */
+#ifndef __rtems__
 	int		td_dupfd;	/* (k) Ret value from fdopen. XXX */
+#endif /* __rtems__ */
+#ifdef __rtems__
+	enum thread_sq_states td_sq_state;
+#endif /* __rtems__ */
 	int		td_sqqueue;	/* (t) Sleepqueue queue blocked on. */
 	void		*td_wchan;	/* (t) Sleep address. */
+#ifndef __rtems__
 	const char	*td_wmesg;	/* (t) Reason for sleep. */
 	volatile u_char td_owepreempt;  /* (k*) Preempt on last critical_exit */
 	u_char		td_tsqueue;	/* (t) Turnstile queue blocked on. */
 	short		td_locks;	/* (k) Debug: count of non-spin locks */
 	short		td_rw_rlocks;	/* (k) Count of rwlock read locks. */
 	short		td_sx_slocks;	/* (k) Count of sx shared locks. */
+#endif /* __rtems__ */
 	short		td_lk_slocks;	/* (k) Count of lockmgr shared locks. */
+#ifndef __rtems__
 	short		td_stopsched;	/* (k) Scheduler stopped. */
 	struct turnstile *td_blocked;	/* (t) Lock thread is blocked on. */
 	const char	*td_lockname;	/* (t) Name of lock blocked on. */
@@ -263,8 +304,11 @@ struct thread {
 	struct lock_list_entry *td_sleeplocks; /* (k) Held sleep locks. */
 	int		td_intr_nesting_level; /* (k) Interrupt recursion. */
 	int		td_pinned;	/* (k) Temporary cpu pin count. */
+#endif /* __rtems__ */
 	struct ucred	*td_ucred;	/* (k) Reference to credentials. */
+#ifndef __rtems__
 	struct plimit	*td_limit;	/* (k) Resource limits. */
+	u_int		td_estcpu;	/* (t) estimated cpu utilization */
 	int		td_slptick;	/* (t) Time at sleep. */
 	int		td_blktick;	/* (t) Time spent blocked. */
 	int		td_swvoltick;	/* (t) Time at last SW_VOL switch. */
@@ -286,14 +330,22 @@ struct thread {
 	u_long		td_profil_addr;	/* (k) Temporary addr until AST. */
 	u_int		td_profil_ticks; /* (k) Temporary ticks until AST. */
 	char		td_name[MAXCOMLEN + 1];	/* (*) Thread name. */
+#else /* __rtems__ */
+#if KTR
+	char		td_name[MAXCOMLEN + 1];	/* (*) Thread name. */
+#endif
+#endif /* __rtems__ */
 	struct file	*td_fpop;	/* (k) file referencing cdev under op */
+#ifndef __rtems__
 	int		td_dbgflags;	/* (c) Userland debugger flags */
 	siginfo_t	td_si;		/* (c) For debugger or core file */
 	int		td_ng_outbound;	/* (k) Thread entered ng from above. */
 	struct osd	td_osd;		/* (k) Object specific data. */
 	struct vm_map_entry *td_map_def_user; /* (k) Deferred entries. */
 	pid_t		td_dbg_forked;	/* (c) Child pid for debugger. */
+#endif /* __rtems__ */
 	u_int		td_vp_reserv;	/* (k) Count of reserved vnodes. */
+#ifndef __rtems__
 	int		td_no_sleeping;	/* (k) Sleeping disabled count. */
 	void		*td_su;		/* (k) FFS SU private */
 	sbintime_t	td_sleeptimo;	/* (t) Sleep timeout. */
@@ -330,11 +382,13 @@ struct thread {
 		TDS_RUNQ,
 		TDS_RUNNING
 	} td_state;			/* (t) thread state */
+#endif /* __rtems__ */
 	union {
 		register_t	tdu_retval[2];
 		off_t		tdu_off;
 	} td_uretoff;			/* (k) Syscall aux returns. */
 #define td_retval	td_uretoff.tdu_retval
+#ifndef __rtems__
 	u_int		td_cowgen;	/* (k) Generation of COW pointers. */
 	/* LP64 hole */
 	struct callout	td_slpcallout;	/* (h) Callout for sleep. */
@@ -368,6 +422,7 @@ struct thread {
 #ifdef __amd64__
 	struct mdthread td_md;		/* (k) Any machine-dependent fields. */
 #endif
+#endif /* __rtems__ */
 };
 
 struct thread0_storage {
@@ -378,12 +433,16 @@ struct thread0_storage {
 struct mtx *thread_lock_block(struct thread *);
 void thread_lock_unblock(struct thread *, struct mtx *);
 void thread_lock_set(struct thread *, struct mtx *);
+#ifndef __rtems__
 #define	THREAD_LOCK_ASSERT(td, type)					\
 do {									\
 	struct mtx *__m = (td)->td_lock;				\
 	if (__m != &blocked_lock)					\
 		mtx_assert(__m, (type));				\
 } while (0)
+#else /* __rtems__ */
+#define	THREAD_LOCK_ASSERT(td, type)
+#endif /* __rtems__ */
 
 #ifdef INVARIANTS
 #define	THREAD_LOCKPTR_ASSERT(td, lock)					\
@@ -512,7 +571,11 @@ do {									\
 #define	TD_IS_SWAPPED(td)	((td)->td_inhibitors & TDI_SWAPPED)
 #define	TD_ON_LOCK(td)		((td)->td_inhibitors & TDI_LOCK)
 #define	TD_AWAITING_INTR(td)	((td)->td_inhibitors & TDI_IWAIT)
+#ifndef __rtems__
 #define	TD_IS_RUNNING(td)	((td)->td_state == TDS_RUNNING)
+#else /* __rtems__ */
+#define	TD_IS_RUNNING(td)	(1)
+#endif /* __rtems__ */
 #define	TD_ON_RUNQ(td)		((td)->td_state == TDS_RUNQ)
 #define	TD_CAN_RUN(td)		((td)->td_state == TDS_CAN_RUN)
 #define	TD_IS_INHIBITED(td)	((td)->td_state == TDS_INHIBITED)
@@ -563,11 +626,14 @@ do {									\
  * Process structure.
  */
 struct proc {
+#ifndef __rtems__
 	LIST_ENTRY(proc) p_list;	/* (d) List of all processes. */
 	TAILQ_HEAD(, thread) p_threads;	/* (c) all threads. */
 	struct mtx	p_slock;	/* process spin lock */
+#endif /* __rtems__ */
 	struct ucred	*p_ucred;	/* (c) Process owner's identity. */
 	struct filedesc	*p_fd;		/* (b) Open files. */
+#ifndef __rtems__
 	struct filedesc_to_leader *p_fdtol; /* (b) Tracking node */
 	struct pstats	*p_stats;	/* (b) Accounting/statistics (CPU). */
 	struct plimit	*p_limit;	/* (c) Resource limits. */
@@ -581,7 +647,9 @@ struct proc {
 		PRS_NORMAL,		/* threads can be run. */
 		PRS_ZOMBIE
 	} p_state;			/* (j/c) Process status. */
+#endif /* __rtems__ */
 	pid_t		p_pid;		/* (b) Process identifier. */
+#ifndef __rtems__
 	LIST_ENTRY(proc) p_hash;	/* (d) Hash chain. */
 	LIST_ENTRY(proc) p_pglist;	/* (g + e) List of processes in pgrp. */
 	struct proc	*p_pptr;	/* (c + e) Pointer to parent process. */
@@ -626,7 +694,9 @@ struct proc {
 	char		p_step;		/* (c) Process is stopped. */
 	u_char		p_pfsflags;	/* (c) Procfs flags. */
 	u_int		p_ptevents;	/* (c + e) ptrace() event mask. */
+#endif /* __rtems__ */
 	struct nlminfo	*p_nlminfo;	/* (?) Only used by/for lockd. */
+#ifndef __rtems__
 	struct kaioinfo	*p_aioinfo;	/* (y) ASYNC I/O info. */
 	struct thread	*p_singlethread;/* (c + j) If single threading this is it */
 	int		p_suspcount;	/* (j) Num threads in suspended mode. */
@@ -648,7 +718,9 @@ struct proc {
 	int		p_osrel;	/* (x) osreldate for the
 					       binary (from ELF note, if any) */
 	char		p_comm[MAXCOMLEN + 1];	/* (x) Process name. */
+#endif /* __rtems__ */
 	struct sysentvec *p_sysent;	/* (b) Syscall dispatch info. */
+#ifndef __rtems__
 	struct pargs	*p_args;	/* (c) Process arguments. */
 	rlim_t		p_cpulimit;	/* (c) Current CPU limit in seconds. */
 	signed char	p_nice;		/* (c) Process "nice" value. */
@@ -690,6 +762,7 @@ struct proc {
 	LIST_HEAD(, proc) p_orphans;	/* (e) Pointer to list of orphans. */
 	uint32_t	p_fctl0;	/* (x) ABI feature control, ELF note */
 	u_int		p_amd64_md_flags; /* (c) md process flags P_MD */
+#endif /* __rtems__ */
 };
 
 #define	p_session	p_pgrp->pg_session
@@ -837,6 +910,7 @@ MALLOC_DECLARE(M_SUBPROC);
 #define	NO_PID		100000
 extern pid_t pid_max;
 
+#ifndef __rtems__
 #define	SESS_LEADER(p)	((p)->p_session->s_leader == (p))
 
 
@@ -942,6 +1016,30 @@ extern pid_t pid_max;
 	PROC_LOCK_ASSERT((p), MA_OWNED);				\
 	(p)->p_cowgen++;						\
 } while (0)
+#else /* __rtems__ */
+#define SESS_LEADER(p) (1)
+#define STOPEVENT(p, e, v) do { } while (0)
+#define PROC_LOCK(p) do { } while (0)
+#define PROC_TRYLOCK(p) do { } while (0)
+#define	PROC_UNLOCK(p) do { } while (0)
+#define	PROC_LOCKED(p) do { } while (0)
+#define	PROC_LOCK_ASSERT(p, type) do { } while (0)
+#define	PGRP_LOCK(pg) do { } while (0)
+#define	PGRP_UNLOCK(pg) do { } while (0)
+#define	PGRP_LOCKED(pg) do { } while (0)
+#define	PGRP_LOCK_ASSERT(pg, type) do { } while (0)
+#define	PGRP_LOCK_PGSIGNAL(pg) do { } while (0)
+#define	PGRP_UNLOCK_PGSIGNAL(pg) do { } while (0)
+#define	SESS_LOCK(s) do { } while (0)
+#define	SESS_UNLOCK(s) do { } while (0)
+#define	SESS_LOCKED(s) do { } while (0)
+#define	SESS_LOCK_ASSERT(s, type) do { } while (0)
+#define	PHOLD(x) do { } while (0)
+#define	_PHOLD(x) do { } while (0)
+#define PROC_ASSERT_HELD(p) do { } while (0)
+#define	PRELE(x) do { } while (0)
+#define PROC_ASSERT_NOT_HELD(p) do { } while (0)
+#endif /* __rtems__ */
 
 /* Check whether a thread is safe to be swapped out. */
 #define	thread_safetoswapout(td)	((td)->td_flags & TDF_CANSWAP)
@@ -1023,8 +1121,13 @@ int	pget(pid_t pid, int flags, struct proc **pp);
 
 void	ast(struct trapframe *framep);
 struct	thread *choosethread(void);
+#ifndef __rtems__
 int	cr_cansee(struct ucred *u1, struct ucred *u2);
 int	cr_canseesocket(struct ucred *cred, struct socket *so);
+#else /* __rtems__ */
+#define	cr_cansee(u1, u2) 0
+#define	cr_canseesocket(cred, so) 0
+#endif /* __rtems__ */
 int	cr_canseeothergids(struct ucred *u1, struct ucred *u2);
 int	cr_canseeotheruids(struct ucred *u1, struct ucred *u2);
 int	cr_canseejailproc(struct ucred *u1, struct ucred *u2);
@@ -1041,8 +1144,13 @@ void	fork_return(struct thread *, struct trapframe *);
 int	inferior(struct proc *p);
 void	kern_proc_vmmap_resident(struct vm_map *map, struct vm_map_entry *entry,
 	    int *resident_count, bool *super);
+#ifndef __rtems__
 void	kern_yield(int);
 void 	kick_proc0(void);
+#else /* __rtems__ */
+#define	kern_yield(x) sched_yield()
+#define	kick_proc0()
+#endif /* __rtems__ */
 void	killjobc(void);
 int	leavepgrp(struct proc *p);
 int	maybe_preempt(struct thread *td);
@@ -1073,8 +1181,13 @@ void	pstats_fork(struct pstats *src, struct pstats *dst);
 void	pstats_free(struct pstats *ps);
 void	proc_clear_orphan(struct proc *p);
 void	reaper_abandon_children(struct proc *p, bool exiting);
+#ifndef __rtems__
 int	securelevel_ge(struct ucred *cr, int level);
 int	securelevel_gt(struct ucred *cr, int level);
+#else /* __rtems__ */
+#define securelevel_ge(x, y) 0
+#define securelevel_gt(x, y) 0
+#endif /* __rtems__ */
 void	sess_hold(struct session *);
 void	sess_release(struct session *);
 int	setrunnable(struct thread *);
@@ -1104,8 +1217,10 @@ void	cpu_fork_kthread_handler(struct thread *, void (*)(void *), void *);
 int	cpu_procctl(struct thread *td, int idtype, id_t id, int com,
 	    void *data);
 void	cpu_set_syscall_retval(struct thread *, int);
+#ifndef __rtems__
 void	cpu_set_upcall(struct thread *, void (*)(void *), void *,
 	    stack_t *);
+#endif /* __rtems__ */
 int	cpu_set_user_tls(struct thread *, void *tls_base);
 void	cpu_thread_alloc(struct thread *);
 void	cpu_thread_clean(struct thread *);
@@ -1145,6 +1260,7 @@ struct thread	*thread_find(struct proc *p, lwpid_t tid);
 void	stop_all_proc(void);
 void	resume_all_proc(void);
 
+#ifndef __rtems__
 static __inline int
 curthread_pflags_set(int flags)
 {
@@ -1179,6 +1295,7 @@ td_softdep_cleanup(struct thread *td)
 	if (td->td_su != NULL && softdep_ast_cleanup != NULL)
 		softdep_ast_cleanup(td);
 }
+#endif /* __rtems__ */
 
 #endif	/* _KERNEL */
 

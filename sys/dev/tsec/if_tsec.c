@@ -95,9 +95,11 @@ static void	tsec_start_locked(struct ifnet *ifp);
 static void	tsec_stop(struct tsec_softc *sc);
 static void	tsec_tick(void *arg);
 static void	tsec_watchdog(struct tsec_softc *sc);
+#ifndef __rtems__
 static void	tsec_add_sysctls(struct tsec_softc *sc);
 static int	tsec_sysctl_ic_time(SYSCTL_HANDLER_ARGS);
 static int	tsec_sysctl_ic_count(SYSCTL_HANDLER_ARGS);
+#endif /* __rtems__ */
 static void	tsec_set_rxic(struct tsec_softc *sc);
 static void	tsec_set_txic(struct tsec_softc *sc);
 static int	tsec_receive_intr_locked(struct tsec_softc *sc, int count);
@@ -147,7 +149,9 @@ tsec_attach(struct tsec_softc *sc)
 	sc->tx_ic_count = 16;
 	tsec_set_rxic(sc);
 	tsec_set_txic(sc);
+#ifndef __rtems__
 	tsec_add_sysctls(sc);
+#endif /* __rtems__ */
 
 	/* Allocate a busdma tag and DMA safe memory for TX descriptors. */
 	error = tsec_alloc_dma_desc(sc->dev, &sc->tsec_tx_dtag,
@@ -274,6 +278,7 @@ tsec_attach(struct tsec_softc *sc)
 	error = mii_attach(sc->dev, &sc->tsec_miibus, ifp, tsec_ifmedia_upd,
 	    tsec_ifmedia_sts, BMSR_DEFCAPMASK, sc->phyaddr, MII_OFFSET_ANY,
 	    0);
+#ifndef __rtems__
 	if (error) {
 		device_printf(sc->dev, "attaching PHYs failed\n");
 		if_free(ifp);
@@ -282,6 +287,12 @@ tsec_attach(struct tsec_softc *sc)
 		return (error);
 	}
 	sc->tsec_mii = device_get_softc(sc->tsec_miibus);
+#else /* __rtems__ */
+	if (error == 0)
+		sc->tsec_mii = device_get_softc(sc->tsec_miibus);
+	else
+		sc->tsec_link = 1;
+#endif /* __rtems__ */
 
 	/* Set MAC address */
 	tsec_get_hwaddr(sc, hwaddr);
@@ -449,6 +460,9 @@ tsec_init_locked(struct tsec_softc *sc)
 	}
 
 	/* Step 9: Setup the MII Mgmt */
+#ifdef __rtems__
+	if (sc->tsec_mii)
+#endif /* __rtems__ */
 	mii_mediachg(sc->tsec_mii);
 
 	/* Step 10: Clear IEVENT register */
@@ -972,6 +986,11 @@ tsec_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 		}
 	case SIOCGIFMEDIA:
 	case SIOCSIFMEDIA:
+#ifdef __rtems__
+		if (sc->tsec_mii == 0)
+			error = ENXIO;
+		else
+#endif /* __rtems__ */
 		error = ifmedia_ioctl(ifp, ifr, &sc->tsec_mii->mii_media,
 		    command);
 		break;
@@ -1024,6 +1043,10 @@ tsec_ifmedia_upd(struct ifnet *ifp)
 	struct tsec_softc *sc = ifp->if_softc;
 	struct mii_data *mii;
 
+#ifdef __rtems__
+	if (sc->tsec_mii == NULL)
+		return (0);
+#endif /* __rtems__ */
 	TSEC_TRANSMIT_LOCK(sc);
 
 	mii = sc->tsec_mii;
@@ -1039,6 +1062,10 @@ tsec_ifmedia_sts(struct ifnet *ifp, struct ifmediareq *ifmr)
 	struct tsec_softc *sc = ifp->if_softc;
 	struct mii_data *mii;
 
+#ifdef __rtems__
+	if (sc->tsec_mii == NULL)
+		return (0);
+#endif /* __rtems__ */
 	TSEC_TRANSMIT_LOCK(sc);
 
 	mii = sc->tsec_mii;
@@ -1265,6 +1292,9 @@ tsec_tick(void *arg)
 	ifp = sc->tsec_ifp;
 	link = sc->tsec_link;
 
+#ifdef __rtems__
+	if (sc->tsec_mii != NULL)
+#endif /* __rtems__ */
 	mii_tick(sc->tsec_mii);
 
 	if (link == 0 && sc->tsec_link == 1 &&
@@ -1626,6 +1656,10 @@ tsec_miibus_statchg(device_t dev)
 
 	sc = device_get_softc(dev);
 	mii = sc->tsec_mii;
+#ifdef __rtems__
+	if (mii == NULL)
+		return;
+#endif /* __rtems__ */
 	link = ((mii->mii_media_status & IFM_ACTIVE) ? 1 : 0);
 
 	tmp = TSEC_READ(sc, TSEC_REG_MACCFG2) & ~TSEC_MACCFG2_IF;
@@ -1670,6 +1704,7 @@ tsec_miibus_statchg(device_t dev)
 	}
 }
 
+#ifndef __rtems__
 static void
 tsec_add_sysctls(struct tsec_softc *sc)
 {
@@ -1783,6 +1818,7 @@ tsec_sysctl_ic_count(SYSCTL_HANDLER_ARGS)
 
 	return (0);
 }
+#endif /* __rtems__ */
 
 static void
 tsec_set_rxic(struct tsec_softc *sc)

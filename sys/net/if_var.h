@@ -105,8 +105,15 @@ VNET_DECLARE(struct hhook_head *, ipsec_hhh_in[HHOOK_IPSEC_COUNT]);
 VNET_DECLARE(struct hhook_head *, ipsec_hhh_out[HHOOK_IPSEC_COUNT]);
 #define	V_ipsec_hhh_in	VNET(ipsec_hhh_in)
 #define	V_ipsec_hhh_out	VNET(ipsec_hhh_out)
+#ifndef __rtems__
 extern epoch_t net_epoch_preempt;
 extern epoch_t net_epoch;
+#else /* __rtems__ */
+extern struct epoch _bsd_net_epoch_preempt;
+#define	net_epoch_preempt &_bsd_net_epoch_preempt
+extern struct epoch _bsd_net_epoch;
+#define	net_epoch &_bsd_net_epoch
+#endif /* __rtems__ */
 #endif /* _KERNEL */
 
 typedef enum {
@@ -376,20 +383,36 @@ struct ifnet {
 	/* Ethernet PCP */
 	uint8_t if_pcp;
 
+#ifndef __rtems__
 	/*
 	 * Netdump hooks to be called while dumping.
 	 */
 	struct netdump_methods *if_netdump_methods;
+#endif /* __rtems__ */
 	struct epoch_context	if_epoch_ctx;
 	void 		       *if_unused[4];
 
+#ifndef __rtems__
 	/*
 	 * Spare fields to be added before branching a stable branch, so
 	 * that structure can be enhanced without changing the kernel
 	 * binary interface.
 	 */
 	int	if_ispare[4];		/* general use */
+#else /* __rtems__ */
+	void	*if_input_arg;
+#endif /* __rtems__ */
 };
+#ifdef __rtems__
+struct rtems_ifinputreq {
+	char	ifr_name[IFNAMSIZ];
+	void 	*arg;
+	void	(*init)(struct ifnet *, void *);
+	void	(*new_if_input)(struct ifnet *, struct mbuf *);
+	void	(*old_if_input)(struct ifnet *, struct mbuf *);
+};
+#define	RTEMS_SIOSIFINPUT	_IOWR('i', 255, struct rtems_ifinputreq)
+#endif /* __rtems__ */
 
 /* for compatibility with other BSDs */
 #define	if_name(ifp)	((ifp)->if_xname)

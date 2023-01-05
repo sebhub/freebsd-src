@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that: (1) source code
@@ -62,7 +66,7 @@ const struct tok ipproto_values[] = {
  * much consistency as possible with the previously implemented behaviour,
  * which was based on getprotobynumber (3).
  */
-static const char *netdb_protocol_names[256] = {
+static const char *const netdb_protocol_names[256] = {
 	"hopopt",            /* 0 (IPPROTO_HOPOPTS, IPv6 Hop-by-Hop Option) */
 	"icmp",              /* 1 (IPPROTO_ICMP, Internet Control Message) */
 	"igmp",              /* 2 (IPPROTO_IGMP, Internet Group Management) */
@@ -361,3 +365,6 @@ netdb_protoname (const nd_uint8_t protoid)
 {
 	return netdb_protocol_names[protoid];
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-ipproto-data.h"
+#endif /* __rtems__ */

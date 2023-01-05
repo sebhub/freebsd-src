@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  */
 
@@ -6,6 +10,9 @@ static const char rcsid[] =
   "$FreeBSD$";
 #endif /* not lint */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -29,6 +36,9 @@ static const char rcsid[] =
 #include <errno.h>
 
 #include "ifconfig.h"
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-iflagg-data.h"
+#endif /* __rtems__ */
 
 char lacpbuf[120];	/* LACP peer '[(a,a,a),(p,p,p)]' */
 
@@ -323,7 +333,11 @@ static struct afswtch af_lagg = {
 	.af_other_status = lagg_status,
 };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+void
+#endif /* __rtems__ */
 lagg_ctor(void)
 {
 	int i;

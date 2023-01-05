@@ -375,6 +375,11 @@ cpsw_debugf(const char *fmt, ...)
 
 #define	cpsw_cpdma_bd_offset(i)	(CPSW_CPPI_RAM_OFFSET + ((i)*16))
 
+#ifdef __rtems__
+/* Missing in the bus.h provided by rtems. */
+#define BUS_SPACE_PHYSADDR(res, offs) \
+	((u_int)(rman_get_start(res)+(offs)))
+#endif /* __rtems__ */
 #define	cpsw_cpdma_bd_paddr(sc, slot)					\
 	BUS_SPACE_PHYSADDR(sc->mem_res, slot->bd_offset)
 #define	cpsw_cpdma_read_bd(sc, slot, val)				\
@@ -1757,7 +1762,9 @@ cpsw_rx_enqueue(struct cpsw_softc *sc)
 			break;
 		}
 
+#ifndef __rtems__
 		bus_dmamap_sync(sc->mbuf_dtag, slot->dmamap, BUS_DMASYNC_PREREAD);
+#endif /* __rtems__ */
 
 		/* Create and submit new rx descriptor. */
 		if ((next = STAILQ_NEXT(slot, next)) != NULL)
@@ -1769,6 +1776,10 @@ cpsw_rx_enqueue(struct cpsw_softc *sc)
 		bd.buflen = MCLBYTES - 1;
 		bd.pktlen = bd.buflen;
 		bd.flags = CPDMA_BD_OWNER;
+#ifdef __rtems__
+		rtems_cache_invalidate_multiple_data_lines(
+		    seg->ds_addr, bd.buflen);
+#endif /* __rtems__ */
 		cpsw_cpdma_write_bd(sc, slot, &bd);
 		++added;
 
@@ -1882,8 +1893,10 @@ cpswp_tx_enqueue(struct cpswp_softc *sc)
 			break;
 		}
 
+#ifndef __rtems__
 		bus_dmamap_sync(sc->swsc->mbuf_dtag, slot->dmamap,
 				BUS_DMASYNC_PREWRITE);
+#endif /* __rtems__ */
 
 		CPSW_DEBUGF(sc->swsc,
 		    ("Queueing TX packet: %d segments + %d pad bytes",
@@ -1916,6 +1929,10 @@ cpswp_tx_enqueue(struct cpswp_softc *sc)
 			bd.flags |= CPDMA_BD_TO_PORT;
 			bd.flags |= ((sc->unit + 1) & CPDMA_BD_PORT_MASK);
 		}
+#ifdef __rtems__
+		rtems_cache_flush_multiple_data_lines((void *)segs[0].ds_addr,
+		    segs[0].ds_len);
+#endif /* __rtems__ */
 		for (seg = 1; seg < nsegs; ++seg) {
 			/* Save the previous buffer (which isn't EOP) */
 			cpsw_cpdma_write_bd(sc->swsc, slot, &bd);
@@ -1934,6 +1951,10 @@ cpswp_tx_enqueue(struct cpswp_softc *sc)
 			bd.buflen = segs[seg].ds_len;
 			bd.pktlen = 0;
 			bd.flags = CPDMA_BD_OWNER;
+#ifdef __rtems__
+			rtems_cache_flush_multiple_data_lines(
+			    (void *)segs[seg].ds_addr, segs[seg].ds_len);
+#endif /* __rtems__ */
 		}
 
 		/* Save the final buffer. */

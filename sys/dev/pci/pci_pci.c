@@ -1591,6 +1591,7 @@ pcib_attach_common(device_t dev)
 	sc->flags |= PCIB_SUBTRACTIVE;
 	break;
 
+#ifndef __rtems__
 #if !(defined(NEW_PCIB) && defined(PCI_RES_BUS))
     /* Compaq R3000 BIOS sets wrong subordinate bus number. */
     case 0x00dd10de:
@@ -1618,6 +1619,7 @@ pcib_attach_common(device_t dev)
 	    break;
 	}
 #endif
+#endif /* __rtems__ */
     }
 
     if (pci_msi_device_blacklisted(dev))

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1991, 1993, 1994, 1995, 1996, 1997
  *      The Regents of the University of California.  All rights reserved.
@@ -862,3 +866,6 @@ l2tp_print(netdissect_options *ndo, const u_char *dat, u_int length)
  trunc:
 	ND_PRINT((ndo, "%s", tstr));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-l2tp-data.h"
+#endif /* __rtems__ */

@@ -1029,12 +1029,15 @@ usb_quirk_add_entry_from_str(const char *name, const char *env)
 static void
 usb_quirk_init(void *arg)
 {
+#ifndef __rtems__
 	char envkey[sizeof(USB_QUIRK_ENVROOT) + 2];	/* 2 digits max, 0 to 99 */
 	int i;
+#endif /* __rtems__ */
   
 	/* initialize mutex */
 	mtx_init(&usb_quirk_mtx, "USB quirk", NULL, MTX_DEF);
 
+#ifndef __rtems__
 	/* look for quirks defined by the environment variable */
 	for (i = 0; i != 100; i++) {
 		snprintf(envkey, sizeof(envkey), USB_QUIRK_ENVROOT "%d", i);
@@ -1046,12 +1049,14 @@ usb_quirk_init(void *arg)
 		/* parse environment variable */
 		usb_quirk_add_entry_from_str(envkey, kern_getenv(envkey));
 	}
+#endif /* __rtems__ */
 	
 	/* register our function */
 	usb_test_quirk_p = &usb_test_quirk_by_info;
 	usb_quirk_ioctl_p = &usb_quirk_ioctl;
 }
 
+#ifndef __rtems__
 static void
 usb_quirk_uninit(void *arg)
 {
@@ -1060,6 +1065,7 @@ usb_quirk_uninit(void *arg)
 	/* destroy mutex */
 	mtx_destroy(&usb_quirk_mtx);
 }
+#endif /* __rtems__ */
 
 SYSINIT(usb_quirk_init, SI_SUB_LOCK, SI_ORDER_FIRST, usb_quirk_init, NULL);
 SYSUNINIT(usb_quirk_uninit, SI_SUB_LOCK, SI_ORDER_ANY, usb_quirk_uninit, NULL);

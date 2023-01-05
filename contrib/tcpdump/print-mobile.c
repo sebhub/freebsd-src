@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*	$NetBSD: print-mobile.c,v 1.2 1998/09/30 08:57:01 hwr Exp $ */
 
 /*
@@ -101,3 +105,6 @@ mobile_print(netdissect_options *ndo, const u_char *bp, u_int length)
 		ND_PRINT((ndo, " (bad checksum %d)", crc));
 	}
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-mobile-data.h"
+#endif /* __rtems__ */

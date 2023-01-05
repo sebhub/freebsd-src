@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
  *
@@ -28,6 +32,9 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -43,6 +50,9 @@ __FBSDID("$FreeBSD$");
 #include <err.h>
 
 #include "ifconfig.h"
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-ifgre-data.h"
+#endif /* __rtems__ */
 
 #define	GREBITS	"\020\01ENABLE_CSUM\02ENABLE_SEQ\03UDPENCAP"
 
@@ -133,7 +143,11 @@ static struct afswtch af_gre = {
 	.af_other_status = gre_status,
 };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+void
+#endif /* __rtems__ */
 gre_ctor(void)
 {
 	size_t i;

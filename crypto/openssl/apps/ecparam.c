@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-openssl-namespace.h"
+#endif /* __rtems__ */
+
 /*
  * Copyright 2002-2018 The OpenSSL Project Authors. All Rights Reserved.
  * Copyright (c) 2002, Oracle and/or its affiliates. All rights reserved
@@ -448,3 +453,6 @@ int ecparam_main(int argc, char **argv)
 }
 
 #endif
+#ifdef __rtems__
+#include "rtems-bsd-openssl-ecparam-data.h"
+#endif /* __rtems__ */

@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-namespace.h"
+#define	ENABLE_ALTQ
+#endif /* __rtems__ */
+
 /*	$OpenBSD: pfctl.c,v 1.278 2008/08/31 20:18:17 jmc Exp $ */
 
 /*-
@@ -33,6 +38,16 @@
  *
  */
 
+#ifdef __rtems__
+#define __need_getopt_newlib
+#include <getopt.h>
+#include <machine/rtems-bsd-program.h>
+#include <machine/rtems-bsd-commands.h>
+
+/* Provided by kernel-space modules */
+#define	pf_get_ruleset_number _bsd_pf_get_ruleset_number
+#define	pf_init_ruleset _bsd_pf_init_ruleset
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -64,6 +79,9 @@ __FBSDID("$FreeBSD$");
 
 #include "pfctl_parser.h"
 #include "pfctl.h"
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-pfctl-data.h"
+#endif /* __rtems__ */
 
 void	 usage(void);
 int	 pfctl_enable(int, int);
@@ -239,7 +257,11 @@ static const char * const optiopt_list[] = {
 void
 usage(void)
 {
+#ifndef __rtems__
 	extern char *__progname;
+#else /* __rtems__ */
+#define __progname "pfctl"
+#endif /* __rtems__ */
 
 	fprintf(stderr,
 "usage: %s [-AdeghmNnOPqRrvz] [-a anchor] [-D macro=value] [-F modifier]\n"
@@ -1059,7 +1081,11 @@ pfctl_show_nat(int dev, int opts, char *anchorname)
 {
 	struct pfioc_rule pr;
 	u_int32_t mnr, nr;
+#ifndef __rtems__
 	static int nattype[3] = { PF_NAT, PF_RDR, PF_BINAT };
+#else /* __rtems__ */
+	static const int nattype[3] = { PF_NAT, PF_RDR, PF_BINAT };
+#endif /* __rtems__ */
 	int i, dotitle = opts & PF_OPT_SHOWALL;
 
 	memset(&pr, 0, sizeof(pr));
@@ -2104,6 +2130,29 @@ pfctl_lookup_option(char *cmd, const char * const *list)
 	return (NULL);
 }
 
+#ifdef __rtems__
+static int main(int argc, char *argv[]);
+
+RTEMS_LINKER_RWSET(bsd_prog_pfctl, char);
+
+int
+rtems_bsd_command_pfctl(int argc, char *argv[])
+{
+	int exit_code;
+	void *data_begin;
+	size_t data_size;
+
+	data_begin = RTEMS_LINKER_SET_BEGIN(bsd_prog_pfctl);
+	data_size = RTEMS_LINKER_SET_SIZE(bsd_prog_pfctl);
+
+	rtems_bsd_program_lock();
+	exit_code = rtems_bsd_program_call_main_with_data_restore("pfctl",
+	    main, argc, argv, data_begin, data_size);
+	rtems_bsd_program_unlock();
+
+	return exit_code;
+}
+#endif /* __rtems__ */
 int
 main(int argc, char *argv[])
 {
@@ -2114,6 +2163,15 @@ main(int argc, char *argv[])
 	int	 optimize = PF_OPTIMIZE_BASIC;
 	char	 anchorname[MAXPATHLEN];
 	char	*path;
+#ifdef __rtems__
+	struct getopt_data getopt_data;
+	memset(&getopt_data, 0, sizeof(getopt_data));
+#define optind getopt_data.optind
+#define optarg getopt_data.optarg
+#define opterr getopt_data.opterr
+#define optopt getopt_data.optopt
+#define getopt(argc, argv, opt) getopt_r(argc, argv, "+" opt, &getopt_data)
+#endif /* __rtems__ */
 
 	if (argc < 2)
 		usage();

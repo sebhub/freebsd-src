@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-openssl-namespace.h"
+#endif /* __rtems__ */
+
 /*
  * Copyright 1995-2019 The OpenSSL Project Authors. All Rights Reserved.
  *
@@ -88,9 +93,14 @@ const OPTIONS enc_options[] = {
     {NULL}
 };
 
+#ifdef __rtems__
+static char buf[128];
+#endif /* __rtems__ */
 int enc_main(int argc, char **argv)
 {
+#ifndef __rtems__
     static char buf[128];
+#endif /* __rtems__ */
     static const char magic[] = "Salted__";
     ENGINE *e = NULL;
     BIO *in = NULL, *out = NULL, *b64 = NULL, *benc = NULL, *rbio =
@@ -673,3 +683,6 @@ static int set_hex(const char *in, unsigned char *out, int size)
     }
     return 1;
 }
+#ifdef __rtems__
+#include "rtems-bsd-openssl-enc-data.h"
+#endif /* __rtems__ */

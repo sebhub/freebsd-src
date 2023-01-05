@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2015 Ritesh Ranjan (r.ranjan789@gmail.com)
  * All rights reserved.
@@ -447,3 +451,6 @@ static void loc_hdr_flag(netdissect_options *ndo, uint16_t flag)
 	ND_PRINT((ndo, " flags [%s],", bittok2str(lisp_loc_flag, "none", flag)));
 }
 
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-lisp-data.h"
+#endif /* __rtems__ */

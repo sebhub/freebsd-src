@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-openssl-namespace.h"
+#endif /* __rtems__ */
+
 /*
  * Copyright 1995-2019 The OpenSSL Project Authors. All Rights Reserved.
  *
@@ -490,3 +495,6 @@ int do_fp(BIO *out, unsigned char *buf, BIO *bp, int sep, int binout,
     }
     return 0;
 }
+#ifdef __rtems__
+#include "rtems-bsd-openssl-dgst-data.h"
+#endif /* __rtems__ */

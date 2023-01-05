@@ -66,11 +66,14 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/bus.h>
 
+#ifndef __rtems__
 SYSCTL_INT(_kern, KERN_IOV_MAX, iov_max, CTLFLAG_RD, SYSCTL_NULL_INT_PTR, UIO_MAXIOV,
 	"Maximum number of elements in an I/O vector; sysconf(_SC_IOV_MAX)");
+#endif /* __rtems__ */
 
 static int uiomove_faultflag(void *cp, int n, struct uio *uio, int nofault);
 
+#ifndef __rtems__
 int
 copyin_nofault(const void *udaddr, void *kaddr, size_t len)
 {
@@ -190,6 +193,7 @@ physcopyout_vlist(vm_paddr_t src, bus_dma_segment_t *dst, off_t offset,
 
 	return (error);
 }
+#endif /* __rtems__ */
 
 int
 uiomove(void *cp, int n, struct uio *uio)
@@ -210,8 +214,13 @@ uiomove_faultflag(void *cp, int n, struct uio *uio, int nofault)
 {
 	struct iovec *iov;
 	size_t cnt;
+#ifndef __rtems__
 	int error, newflags, save;
+#else /* __rtems__ */
+	int error;
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 	save = error = 0;
 
 	KASSERT(uio->uio_rw == UIO_READ || uio->uio_rw == UIO_WRITE,
@@ -234,6 +243,7 @@ uiomove_faultflag(void *cp, int n, struct uio *uio, int nofault)
 	} else {
 		KASSERT(nofault == 0, ("uiomove: nofault"));
 	}
+#endif /* __rtems__ */
 
 	while (n > 0 && uio->uio_resid) {
 		iov = uio->uio_iov;
@@ -249,7 +259,9 @@ uiomove_faultflag(void *cp, int n, struct uio *uio, int nofault)
 		switch (uio->uio_segflg) {
 
 		case UIO_USERSPACE:
+#ifndef __rtems__
 			maybe_yield();
+#endif /* __rtems__ */
 			if (uio->uio_rw == UIO_READ)
 				error = copyout(cp, iov->iov_base, cnt);
 			else
@@ -275,8 +287,10 @@ uiomove_faultflag(void *cp, int n, struct uio *uio, int nofault)
 		n -= cnt;
 	}
 out:
+#ifndef __rtems__
 	if (save)
 		curthread_pflags_restore(save);
+#endif /* __rtems__ */
 	return (error);
 }
 
@@ -302,6 +316,7 @@ uiomove_frombuf(void *buf, int buflen, struct uio *uio)
 	return (uiomove((char *)buf + offset, n, uio));
 }
 
+#ifndef __rtems__
 /*
  * Give next character to user as result of read.
  */
@@ -382,6 +397,7 @@ copyinstrfrom(const void * __restrict src, void * __restrict dst, size_t len,
 	}
 	return (error);
 }
+#endif /* __rtems__ */
 
 int
 copyiniov(const struct iovec *iovp, u_int iovcnt, struct iovec **iov, int error)
@@ -401,6 +417,7 @@ copyiniov(const struct iovec *iovp, u_int iovcnt, struct iovec **iov, int error)
 	return (error);
 }
 
+#ifndef __rtems__
 int
 copyinuio(const struct iovec *iovp, u_int iovcnt, struct uio **uiop)
 {
@@ -625,3 +642,4 @@ casuword(volatile u_long *addr, u_long old, u_long new)
 }
 
 #endif /* NO_FUEWORD */
+#endif /* __rtems__ */

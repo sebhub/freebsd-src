@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-openssl-namespace.h"
+#endif /* __rtems__ */
+
 /*
  * Copyright 1995-2019 The OpenSSL Project Authors. All Rights Reserved.
  *
@@ -353,3 +358,6 @@ static int do_generate(char *genstr, const char *genconf, BUF_MEM *buf)
     ASN1_TYPE_free(atyp);
     return -1;
 }
+#ifdef __rtems__
+#include "rtems-bsd-openssl-asn1pars-data.h"
+#endif /* __rtems__ */

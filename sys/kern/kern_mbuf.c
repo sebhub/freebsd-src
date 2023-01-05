@@ -55,6 +55,9 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_map.h>
 #include <vm/uma.h>
 #include <vm/uma_dbg.h>
+#ifdef __rtems__
+#include <rtems/bsd/bsd.h>
+#endif /* __rtems__ */
 
 /*
  * In FreeBSD, Mbufs and Mbuf Clusters are allocated from UMA
@@ -118,6 +121,7 @@ SYSCTL_QUAD(_kern_ipc, OID_AUTO, maxmbufmem, CTLFLAG_RDTUN | CTLFLAG_NOFETCH, &m
 static void
 tunable_mbinit(void *dummy)
 {
+#ifndef __rtems__
 	quad_t realmem;
 
 	/*
@@ -130,6 +134,10 @@ tunable_mbinit(void *dummy)
 	TUNABLE_QUAD_FETCH("kern.ipc.maxmbufmem", &maxmbufmem);
 	if (maxmbufmem > realmem / 4 * 3)
 		maxmbufmem = realmem / 4 * 3;
+#else /* __rtems__ */
+	maxmbufmem = rtems_bsd_get_allocator_domain_size(
+	    RTEMS_BSD_ALLOCATOR_DOMAIN_MBUF);
+#endif /* __rtems__ */
 
 	TUNABLE_INT_FETCH("kern.ipc.nmbclusters", &nmbclusters);
 	if (nmbclusters == 0)
@@ -170,7 +178,9 @@ sysctl_nmbclusters(SYSCTL_HANDLER_ARGS)
 		    nmbufs >= nmbclusters + nmbjumbop + nmbjumbo9 + nmbjumbo16) {
 			nmbclusters = newnmbclusters;
 			nmbclusters = uma_zone_set_max(zone_clust, nmbclusters);
+#ifndef __rtems__
 			EVENTHANDLER_INVOKE(nmbclusters_change);
+#endif /* __rtems__ */
 		} else
 			error = EINVAL;
 	}
@@ -376,8 +386,10 @@ mbuf_init(void *dummy)
 	 * drain protocols and push data back to the caches (UMA
 	 * later pushes it back to VM).
 	 */
+#ifndef __rtems__
 	EVENTHANDLER_REGISTER(vm_lowmem, mb_reclaim, NULL,
 	    EVENTHANDLER_PRI_FIRST);
+#endif /* __rtems__ */
 }
 SYSINIT(mbuf, SI_SUB_MBUF, SI_ORDER_FIRST, mbuf_init, NULL);
 
@@ -587,9 +599,13 @@ mbuf_jumbo_alloc(uma_zone_t zone, vm_size_t bytes, int domain, uint8_t *flags,
 
 	/* Inform UMA that this allocator uses kernel_map/object. */
 	*flags = UMA_SLAB_KERNEL;
+#ifndef __rtems__
 	return ((void *)kmem_alloc_contig_domainset(DOMAINSET_FIXED(domain),
 	    bytes, wait, (vm_paddr_t)0, ~(vm_paddr_t)0, 1, 0,
 	    VM_MEMATTR_DEFAULT));
+#else /* __rtems__ */
+	return ((void *)malloc(bytes, M_TEMP, wait));
+#endif /* __rtems__ */
 }
 
 /*
@@ -873,7 +889,9 @@ mb_free_ext(struct mbuf *m)
 			uma_zfree(zone_jumbo16, m->m_ext.ext_buf);
 			uma_zfree(zone_mbuf, mref);
 			break;
+#ifndef __rtems__
 		case EXT_SFBUF:
+#endif /* __rtems__ */
 		case EXT_NET_DRV:
 		case EXT_MOD_TYPE:
 		case EXT_DISPOSABLE:

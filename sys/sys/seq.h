@@ -115,7 +115,7 @@ static __inline void
 seq_write_end(seq_t *seqp)
 {
 
-	atomic_store_rel_int(seqp, *seqp + 1);
+	atomic_store_rel_32(seqp, *seqp + 1);
 	MPASS(!seq_in_modify(*seqp));
 	critical_exit();
 }
@@ -126,7 +126,7 @@ seq_load(const seq_t *seqp)
 	seq_t ret;
 
 	for (;;) {
-		ret = atomic_load_acq_int(__DECONST(seq_t *, seqp));
+		ret = atomic_load_acq_32(__DECONST(seq_t *, seqp));
 		if (seq_in_modify(ret)) {
 			cpu_spinwait();
 			continue;

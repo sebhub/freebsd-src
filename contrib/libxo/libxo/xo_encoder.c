@@ -8,6 +8,7 @@
  * Phil Shafer, August 2015
  */
 
+#ifndef __rtems__
 /**
  * libxo includes a number of fixed encoding styles.  But other
  * external encoders are need to deal with new encoders.  Rather
@@ -373,3 +374,60 @@ xo_encoder_op_name (xo_encoder_op_t op)
 
     return names[op];
 }
+#else /* __rtems__ */
+
+/*
+ * Not supported on RTEMS. Just return errors on all functions.
+ */
+#include "xo.h"
+#include "xo_encoder.h"
+
+void
+xo_encoder_register (const char *name, xo_encoder_func_t func)
+{
+	/* Nothing to do */
+}
+
+void
+xo_encoder_unregister (const char *name)
+{
+	/* Nothing to do */
+}
+
+void
+xo_encoder_path_add (const char *path)
+{
+	/* Nothing to do */
+}
+
+int
+xo_encoder_init (xo_handle_t *xop, const char *name)
+{
+	return -1;
+}
+
+xo_handle_t *
+xo_encoder_create (const char *name, xo_xof_flags_t flags)
+{
+	return NULL;
+}
+
+int
+xo_encoder_handle (xo_handle_t *xop, xo_encoder_op_t op,
+		   const char *name, const char *value, xo_xof_flags_t flags)
+{
+	return -1;
+}
+
+void
+xo_encoders_clean (void)
+{
+	/* Nothing to do */
+}
+
+const char *
+xo_encoder_op_name (xo_encoder_op_t op)
+{
+	return "unknown";
+}
+#endif /* __rtems__ */

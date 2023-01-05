@@ -1,3 +1,9 @@
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-namespace.h"
+#define	WITH_INET6
+#define	WITH_INET
+#endif /* __rtems__ */
+
 /*	$OpenBSD: pfctl_parser.c,v 1.240 2008/06/10 20:55:02 mcbride Exp $ */
 
 /*-
@@ -36,6 +42,9 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -64,6 +73,9 @@ __FBSDID("$FreeBSD$");
 
 #include "pfctl_parser.h"
 #include "pfctl.h"
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-pfctl_parser-data.h"
+#endif /* __rtems__ */
 
 void		 print_op (u_int8_t, const char *, const char *);
 void		 print_port (u_int8_t, u_int16_t, u_int16_t, const char *, int);
@@ -1337,10 +1349,17 @@ get_socket_domain(void)
 	return (sdom);
 }
 
+#ifdef __rtems__
+static int pfctl_s = -1;
+#endif /* __rtems__ */
 int
 get_query_socket(void)
 {
+#ifndef __rtems__
 	static int s = -1;
+#else /* __rtems__ */
+#define	s pfctl_s
+#endif /* __rtems__ */
 
 	if (s == -1) {
 		if ((s = socket(get_socket_domain(), SOCK_DGRAM, 0)) == -1)
@@ -1348,6 +1367,9 @@ get_query_socket(void)
 	}
 
 	return (s);
+#ifdef __rtems__
+#undef s
+#endif /* __rtems__ */
 }
 
 /*

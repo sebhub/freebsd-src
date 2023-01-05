@@ -73,6 +73,7 @@ __FBSDID("$FreeBSD$");
 #define MAKE_PROCESS_CPUCLOCK(pid)	\
 	(CPUCLOCK_BIT|CPUCLOCK_PROCESS_BIT|(pid))
 
+#ifndef __rtems__
 static struct kclock	posix_clocks[MAX_CLOCKS];
 static uma_zone_t	itimer_zone = NULL;
 
@@ -87,11 +88,13 @@ static uma_zone_t	itimer_zone = NULL;
  */
 
 static int	settime(struct thread *, struct timeval *);
+#endif /* __rtems__ */
 static void	timevalfix(struct timeval *);
 static int	user_clock_nanosleep(struct thread *td, clockid_t clock_id,
 		    int flags, const struct timespec *ua_rqtp,
 		    struct timespec *ua_rmtp);
 
+#ifndef __rtems__
 static void	itimer_start(void);
 static int	itimer_init(void *, int, int);
 static void	itimer_fini(void *, int);
@@ -229,6 +232,7 @@ struct clock_gettime_args {
 	struct	timespec *tp;
 };
 #endif
+#ifndef __rtems__
 /* ARGSUSED */
 int
 sys_clock_gettime(struct thread *td, struct clock_gettime_args *uap)
@@ -242,7 +246,9 @@ sys_clock_gettime(struct thread *td, struct clock_gettime_args *uap)
 
 	return (error);
 }
+#endif
 
+#ifndef __rtems__
 static inline void 
 cputick2timespec(uint64_t runtime, struct timespec *ats)
 {
@@ -375,6 +381,7 @@ kern_clock_gettime(struct thread *td, clockid_t clock_id, struct timespec *ats)
 	}
 	return (0);
 }
+#endif
 
 #ifndef _SYS_SYSPROTO_H_
 struct clock_settime_args {
@@ -382,6 +389,7 @@ struct clock_settime_args {
 	const struct	timespec *tp;
 };
 #endif
+#ifndef __rtems__
 /* ARGSUSED */
 int
 sys_clock_settime(struct thread *td, struct clock_settime_args *uap)
@@ -419,6 +427,7 @@ kern_clock_settime(struct thread *td, clockid_t clock_id, struct timespec *ats)
 	error = settime(td, &atv);
 	return (error);
 }
+#endif
 
 #ifndef _SYS_SYSPROTO_H_
 struct clock_getres_args {
@@ -426,6 +435,7 @@ struct clock_getres_args {
 	struct	timespec *tp;
 };
 #endif
+#ifndef __rtems__
 int
 sys_clock_getres(struct thread *td, struct clock_getres_args *uap)
 {
@@ -487,6 +497,7 @@ kern_clock_getres(struct thread *td, clockid_t clock_id, struct timespec *ts)
 	}
 	return (0);
 }
+#endif
 
 int
 kern_nanosleep(struct thread *td, struct timespec *rqt, struct timespec *rmt)
@@ -929,6 +940,7 @@ realitexpire(void *arg)
 	callout_reset_sbt(&p->p_itcallout, tvtosbt(p->p_realtimer.it_value),
 	    isbt >> tc_precexp, realitexpire, p, C_ABSOLUTE);
 }
+#endif /* __rtems__ */
 
 /*
  * Check that a proposed value to load into the .it_value or
@@ -948,6 +960,7 @@ itimerfix(struct timeval *tv)
 	return (0);
 }
 
+#ifndef __rtems__
 /*
  * Decrement an interval timer by a specified number
  * of microseconds, which must be less than a second,
@@ -988,6 +1001,7 @@ expire:
 		itp->it_value.tv_usec = 0;		/* sec is already 0 */
 	return (0);
 }
+#endif /* __rtems__ */
 
 /*
  * Add and subtract routines for timevals.
@@ -1089,6 +1103,7 @@ ppsratecheck(struct timeval *lasttime, int *curpps, int maxpps)
 	}
 }
 
+#ifndef __rtems__
 static void
 itimer_start(void)
 {
@@ -1659,8 +1674,7 @@ realtimer_expire(void *arg)
 		ITIMER_LOCK(it);
 		itimer_leave(it);
 	} else if (timespecisset(&it->it_time.it_value)) {
-		ts = it->it_time.it_value;
-		timespecsub(&ts, &cts, &ts);
+		timespecsub(&it->it_time.it_value, &cts, &ts);
 		TIMESPEC_TO_TIMEVAL(&tv, &ts);
 		callout_reset(&it->it_callout, tvtohz(&tv), realtimer_expire,
  			it);
@@ -1763,3 +1777,4 @@ itimers_event_hook_exit(void *arg, struct proc *p)
 		}
 	}
 }
+#endif /* __rtems__ */

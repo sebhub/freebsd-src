@@ -50,6 +50,7 @@ nvme_ns_cmd_read(struct nvme_namespace *ns, void *payload, uint64_t lba,
 	return (0);
 }
 
+#ifndef __rtems__
 int
 nvme_ns_cmd_read_bio(struct nvme_namespace *ns, struct bio *bp,
     nvme_cb_fn_t cb_fn, void *cb_arg)
@@ -71,6 +72,23 @@ nvme_ns_cmd_read_bio(struct nvme_namespace *ns, struct bio *bp,
 
 	return (0);
 }
+#else /* __rtems__ */
+int
+nvme_ns_cmd_read_iov(struct nvme_namespace *ns, const struct iovec *iov,
+    uint64_t lba, uint32_t lba_count, nvme_cb_fn_t cb_fn, void *cb_arg)
+{
+	struct nvme_request *req;
+
+	req = nvme_allocate_request_iov(iov,
+	    lba_count * nvme_ns_get_sector_size(ns), cb_fn, cb_arg);
+	if (req == NULL)
+		return (ENOMEM);
+
+	nvme_ns_read_cmd(&req->cmd, ns->id, lba, lba_count);
+	nvme_ctrlr_submit_io_request(ns->ctrlr, req);
+	return (0);
+}
+#endif /* __rtems__ */
 
 int
 nvme_ns_cmd_write(struct nvme_namespace *ns, void *payload, uint64_t lba,
@@ -91,6 +109,7 @@ nvme_ns_cmd_write(struct nvme_namespace *ns, void *payload, uint64_t lba,
 	return (0);
 }
 
+#ifndef __rtems__
 int
 nvme_ns_cmd_write_bio(struct nvme_namespace *ns, struct bio *bp,
     nvme_cb_fn_t cb_fn, void *cb_arg)
@@ -111,6 +130,23 @@ nvme_ns_cmd_write_bio(struct nvme_namespace *ns, struct bio *bp,
 
 	return (0);
 }
+#else /* __rtems__ */
+int
+nvme_ns_cmd_write_iov(struct nvme_namespace *ns, const struct iovec *iov,
+    uint64_t lba, uint32_t lba_count, nvme_cb_fn_t cb_fn, void *cb_arg)
+{
+	struct nvme_request *req;
+
+	req = nvme_allocate_request_iov(iov,
+	    lba_count * nvme_ns_get_sector_size(ns), cb_fn, cb_arg);
+	if (req == NULL)
+		return (ENOMEM);
+
+	nvme_ns_write_cmd(&req->cmd, ns->id, lba, lba_count);
+	nvme_ctrlr_submit_io_request(ns->ctrlr, req);
+	return (0);
+}
+#endif /* __rtems__ */
 
 int
 nvme_ns_cmd_deallocate(struct nvme_namespace *ns, void *payload,

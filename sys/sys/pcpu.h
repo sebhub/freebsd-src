@@ -110,8 +110,12 @@ extern uintptr_t dpcpu_off[];
 /*
  * Accessors with a given base.
  */
+#ifndef __rtems__
 #define	_DPCPU_PTR(b, n)						\
     (__typeof(DPCPU_NAME(n))*)((b) + (uintptr_t)&DPCPU_NAME(n))
+#else /* __rtems__ */
+#define	_DPCPU_PTR(b, n) NULL
+#endif /* __rtems__ */
 #define	_DPCPU_GET(b, n)	(*_DPCPU_PTR(b, n))
 #define	_DPCPU_SET(b, n, v)	(*_DPCPU_PTR(b, n) = v)
 
@@ -166,6 +170,7 @@ extern uintptr_t dpcpu_off[];
 
 #endif /* _KERNEL */
 
+#ifndef __rtems__
 /*
  * This structure maps out the global data that needs to be kept on a
  * per-cpu basis.  The members are accessed via the PCPU_GET/SET/PTR
@@ -204,6 +209,9 @@ struct pcpu {
 	 */
 	PCPU_MD_FIELDS;
 } __aligned(CACHE_LINE_SIZE);
+#else /* __rtems__ */
+struct pcpu;
+#endif /* __rtems__ */
 
 #ifdef _KERNEL
 
@@ -215,7 +223,11 @@ extern struct pcpu *cpuid_to_pcpu[];
 #define	curcpu		PCPU_GET(cpuid)
 #define	curvidata	PCPU_GET(vidata)
 
+#ifndef __rtems__
 #define UMA_PCPU_ALLOC_SIZE		PAGE_SIZE
+#else /* __rtems__ */
+#define UMA_PCPU_ALLOC_SIZE		(PAGE_SIZE / 32)
+#endif /* __rtems__ */
 
 #include <machine/pcpu_aux.h>
 
@@ -229,7 +241,11 @@ static inline void *
 zpcpu_get(void *base)
 {
 
+#ifndef __rtems__
 	return ((char *)(base) + UMA_PCPU_ALLOC_SIZE * curcpu);
+#else /* __rtems__ */
+	return ((char *)(base) + UMA_PCPU_ALLOC_SIZE * _SMP_Get_current_processor());
+#endif /* __rtems__ */
 }
 
 static inline void *

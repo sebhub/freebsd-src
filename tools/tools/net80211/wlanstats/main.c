@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-wlanstats-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * Copyright (c) 2002-2007 Sam Leffler, Errno Consulting
  * All rights reserved.
@@ -34,6 +38,13 @@
  * (default interface is wlan0).
  */
 
+#ifdef __rtems__
+#define __need_getopt_newlib
+#include <getopt.h>
+#include <string.h>
+#include <machine/rtems-bsd-program.h>
+#include <machine/rtems-bsd-commands.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/socket.h>
 
@@ -48,8 +59,15 @@
 #include <unistd.h>
 
 #include "wlanstats.h"
+#ifdef __rtems__
+#include "rtems-bsd-wlanstats-main-data.h"
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 static struct {
+#else /* __rtems__ */
+static const struct {
+#endif /* __rtems__ */
 	const char *tag;
 	const char *fmt;
 } tags[] = {
@@ -77,6 +95,7 @@ getfmt(const char *tag)
 	return tag;
 }
 
+#ifndef __rtems__
 static int signalled;
 
 static void
@@ -84,6 +103,7 @@ catchalarm(int signo __unused)
 {
 	signalled = 1;
 }
+#endif /* __rtems__ */
 
 #if 0
 static void
@@ -161,6 +181,29 @@ usage(void) {
 	printf("wlanstats: [-ah] [-i ifname] [-l] [-m station MAC address] [-o fmt] [interval]\n");
 }
 
+#ifdef __rtems__
+static int main(int argc, char *argv[]);
+
+RTEMS_LINKER_RWSET(bsd_prog_wlanstats, char);
+
+int
+rtems_bsd_command_wlanstats(int argc, char *argv[])
+{
+	int exit_code;
+	void *data_begin;
+	size_t data_size;
+
+	data_begin = RTEMS_LINKER_SET_BEGIN(bsd_prog_wlanstats);
+	data_size = RTEMS_LINKER_SET_SIZE(bsd_prog_wlanstats);
+
+	rtems_bsd_program_lock();
+	exit_code = rtems_bsd_program_call_main_with_data_restore("wlanstats",
+	    main, argc, argv, data_begin, data_size);
+	rtems_bsd_program_unlock();
+
+	return exit_code;
+}
+#endif /* __rtems__ */
 int
 main(int argc, char *argv[])
 {
@@ -170,6 +213,15 @@ main(int argc, char *argv[])
 	const char *ifname;
 	int allnodes = 0;
 	int c, mode;
+#ifdef __rtems__
+	struct getopt_data getopt_data;
+	memset(&getopt_data, 0, sizeof(getopt_data));
+#define optind getopt_data.optind
+#define optarg getopt_data.optarg
+#define opterr getopt_data.opterr
+#define optopt getopt_data.optopt
+#define getopt(argc, argv, opt) getopt_r(argc, argv, "+" opt, &getopt_data)
+#endif /* __rtems__ */
 
 	ifname = getenv("WLAN");
 	if (ifname == NULL)
@@ -211,6 +263,7 @@ main(int argc, char *argv[])
 	wf->setstamac(wf, mac);
 
 	if (argc > 0) {
+#ifndef __rtems__
 		u_long interval = strtoul(argv[0], NULL, 0);
 		int line, omask;
 
@@ -281,6 +334,10 @@ main(int argc, char *argv[])
 			} while (len >= sizeof(struct ieee80211req_sta_info));
 		}
 #endif
+#else /* __rtems__ */
+		(void)mode;
+		printf("wlanstats: not implemented\n");
+#endif /* __rtems__ */
 	} else {
 		wf->collect_tot(wf);
 		wf->print_verbose(wf, stdout);

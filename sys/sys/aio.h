@@ -53,10 +53,12 @@
 #define	LIO_NOWAIT		0x0
 #define	LIO_WAIT		0x1
 
+#ifndef __rtems__
 /*
  * Maximum number of operations in a single lio_listio call
  */
 #define	AIO_LISTIO_MAX		16
+#endif /* __rtems__ */
 
 #ifdef _KERNEL
 
@@ -99,7 +101,9 @@ typedef struct aiocb {
 	int	aio_lio_opcode;		/* LIO opcode */
 	int	aio_reqprio;		/* Request priority -- ignored */
 	struct	__aiocb_private	_aiocb_private;
+#ifndef __rtems__
 	struct	sigevent aio_sigevent;	/* Signal to deliver */
+#endif
 } aiocb_t;
 
 #ifdef _KERNEL

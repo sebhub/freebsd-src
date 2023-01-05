@@ -36,18 +36,26 @@
 
 #ifndef _LIBC_PRIVATE_H_
 #define _LIBC_PRIVATE_H_
+#ifndef __rtems__
 #include <sys/_types.h>
 #include <sys/_pthreadtypes.h>
+#else /* __rtems__ */
+#include <sys/types.h>
+#endif /* __rtems__ */
 
 /*
  * This global flag is non-zero when a process has created one
  * or more threads. It is used to avoid calling locking functions
  * when they are not required.
  */
+#ifdef __rtems__
+#define	__isthreaded 1
+#else /* __rtems__ */
 #ifndef __LIBC_ISTHREADED_DECLARED
 #define __LIBC_ISTHREADED_DECLARED
 extern int	__isthreaded;
 #endif
+#endif /* __rtems__ */
 
 /*
  * Elf_Auxinfo *__elf_aux_vector, the pointer to the ELF aux vector

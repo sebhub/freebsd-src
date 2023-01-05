@@ -683,7 +683,11 @@ icmp6_input(struct mbuf **mp, int *offp, int proto)
 			}
 			maxhlen = M_TRAILINGSPACE(n) -
 			    (sizeof(*nip6) + sizeof(*nicmp6) + 4);
+#ifndef __rtems__
 			pr = curthread->td_ucred->cr_prison;
+#else /* __rtems__ */
+			pr = &prison0;
+#endif /* __rtems__ */
 			mtx_lock(&pr->pr_mtx);
 			hlen = strlen(pr->pr_hostname);
 			if (maxhlen > hlen)
@@ -1306,7 +1310,11 @@ ni6_input(struct mbuf *m, int off)
 			 *   wildcard match, if gethostname(3) side has
 			 *   truncated hostname.
 			 */
+#ifndef __rtems__
 			pr = curthread->td_ucred->cr_prison;
+#else /* __rtems__ */
+			pr = &prison0;
+#endif /* __rtems__ */
 			mtx_lock(&pr->pr_mtx);
 			n = ni6_nametodns(pr->pr_hostname,
 			    strlen(pr->pr_hostname), 0);
@@ -1440,7 +1448,11 @@ ni6_input(struct mbuf *m, int off)
 		/*
 		 * XXX do we really have FQDN in hostname?
 		 */
+#ifndef __rtems__
 		pr = curthread->td_ucred->cr_prison;
+#else /* __rtems__ */
+		pr = &prison0;
+#endif /* __rtems__ */
 		mtx_lock(&pr->pr_mtx);
 		n->m_next = ni6_nametodns(pr->pr_hostname,
 		    strlen(pr->pr_hostname), oldfqdn);

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (C) 2000, Richard Sharpe
  *
@@ -66,3 +70,6 @@ beep_print(netdissect_options *ndo, const u_char *bp, u_int length)
 	else
 		ND_PRINT((ndo, " BEEP (payload or undecoded)"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-beep-data.h"
+#endif /* __rtems__ */

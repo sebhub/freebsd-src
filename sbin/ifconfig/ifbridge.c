@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-4-Clause
  *
@@ -40,6 +44,9 @@ static const char rcsid[] =
   "$FreeBSD$";
 #endif /* not lint */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -62,6 +69,9 @@ static const char rcsid[] =
 #include <errno.h>
 
 #include "ifconfig.h"
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-ifbridge-data.h"
+#endif /* __rtems__ */
 
 #define PV2ID(pv, epri, eaddr)  do {		\
 		epri     = pv >> 48;		\
@@ -157,7 +167,11 @@ bridge_interfaces(int s, const char *prefix)
 		err(1, "strdup");
 	/* replace the prefix with whitespace */
 	for (p = pad; *p != '\0'; p++) {
+#ifndef __rtems__
 		if(isprint(*p))
+#else /* __rtems__ */
+		if(isprint((unsigned char)*p))
+#endif /* __rtems__ */
 			*p = ' ';
 	}
 
@@ -745,7 +759,11 @@ static struct afswtch af_bridge = {
 	.af_other_status = bridge_status,
 };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+void
+#endif /* __rtems__ */
 bridge_ctor(void)
 {
 	int i;

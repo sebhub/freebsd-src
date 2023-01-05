@@ -1028,8 +1028,10 @@ epair_modevent(module_t mod, int type, void *data)
 		/* For now limit us to one global mutex and one inq. */
 		epair_dpcpu_init();
 		epair_nh.nh_qlimit = 42 * ifqmaxlen; /* 42 shall be the number. */
+#ifndef __rtems__
 		if (TUNABLE_INT_FETCH("net.link.epair.netisr_maxqlen", &qlimit))
 		    epair_nh.nh_qlimit = qlimit;
+#endif /* __rtems__ */
 		netisr_register(&epair_nh);
 		if (bootverbose)
 			printf("%s initialized.\n", epairname);

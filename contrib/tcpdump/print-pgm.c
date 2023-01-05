@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that: (1) source code
@@ -836,3 +840,6 @@ trunc:
 	if (ch != '\0')
 		ND_PRINT((ndo, ">"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-pgm-data.h"
+#endif /* __rtems__ */

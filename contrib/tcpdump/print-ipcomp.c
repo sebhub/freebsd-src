@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1988, 1989, 1990, 1991, 1993, 1994
  *	The Regents of the University of California.  All rights reserved.
@@ -67,3 +71,6 @@ trunc:
 	ND_PRINT((ndo, "[|IPCOMP]"));
 	return;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-ipcomp-data.h"
+#endif /* __rtems__ */

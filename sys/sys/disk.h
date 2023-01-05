@@ -143,6 +143,7 @@ struct diocgattr_arg {
 
 #define	DIOCZONECMD	_IOWR('d', 143, struct disk_zone_args)
 
+#ifndef __rtems__
 struct diocskerneldump_arg {
 	uint8_t		 kda_enable;
 	uint8_t		 kda_compression;
@@ -155,5 +156,6 @@ struct diocskerneldump_arg {
 	/*
 	 * Enable/Disable the device for kernel core dumps.
 	 */
+#endif /* __rtems__ */
 
 #endif /* _SYS_DISK_H_ */

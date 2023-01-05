@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (C) 2002 WIDE Project.
  * All rights reserved.
@@ -342,3 +346,6 @@ mobility_print(netdissect_options *ndo,
 	ND_PRINT((ndo, "%s", tstr));
 	return(-1);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-mobility-data.h"
+#endif /* __rtems__ */

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*	$OpenBSD: print-gre.c,v 1.6 2002/10/30 03:04:04 fgsch Exp $	*/
 
 /*
@@ -420,3 +424,6 @@ gre_sre_asn_print(netdissect_options *ndo, uint8_t sreoff, uint8_t srelen,
 	}
 	return (1);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-gre-data.h"
+#endif /* __rtems__ */

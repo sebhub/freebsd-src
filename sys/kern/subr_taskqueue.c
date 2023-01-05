@@ -73,7 +73,9 @@ struct taskqueue {
 	char			*tq_name;
 	struct thread		**tq_threads;
 	int			tq_tcount;
+#ifndef __rtems__
 	int			tq_spin;
+#endif /* __rtems__ */
 	int			tq_flags;
 	taskqueue_callback_fn	tq_callbacks[TASKQUEUE_NUM_CALLBACKS];
 	void			*tq_cb_contexts[TASKQUEUE_NUM_CALLBACKS];
@@ -86,6 +88,7 @@ struct taskqueue {
 #define	DT_CALLOUT_ARMED	(1 << 0)
 #define	DT_DRAIN_IN_PROGRESS	(1 << 1)
 
+#ifndef __rtems__
 #define	TQ_LOCK(tq)							\
 	do {								\
 		if ((tq)->tq_spin)					\
@@ -93,8 +96,15 @@ struct taskqueue {
 		else							\
 			mtx_lock(&(tq)->tq_mutex);			\
 	} while (0)
+#else /* __rtems__ */
+#define	TQ_LOCK(tq)							\
+	do {								\
+		mtx_lock(&(tq)->tq_mutex);				\
+	} while (0)
+#endif /* __rtems__ */
 #define	TQ_ASSERT_LOCKED(tq)	mtx_assert(&(tq)->tq_mutex, MA_OWNED)
 
+#ifndef __rtems__
 #define	TQ_UNLOCK(tq)							\
 	do {								\
 		if ((tq)->tq_spin)					\
@@ -102,6 +112,12 @@ struct taskqueue {
 		else							\
 			mtx_unlock(&(tq)->tq_mutex);			\
 	} while (0)
+#else /* __rtems__ */
+#define	TQ_UNLOCK(tq)							\
+	do {								\
+		mtx_unlock(&(tq)->tq_mutex);				\
+	} while (0)
+#endif /* __rtems__ */
 #define	TQ_ASSERT_UNLOCKED(tq)	mtx_assert(&(tq)->tq_mutex, MA_NOTOWNED)
 
 void
@@ -119,8 +135,10 @@ _timeout_task_init(struct taskqueue *queue, struct timeout_task *timeout_task,
 static __inline int
 TQ_SLEEP(struct taskqueue *tq, void *p, const char *wm)
 {
+#ifndef __rtems__
 	if (tq->tq_spin)
 		return (msleep_spin(p, (struct mtx *)&tq->tq_mutex, wm, 0));
+#endif /* __rtems__ */
 	return (msleep(p, &tq->tq_mutex, 0, wm, 0));
 }
 
@@ -149,7 +167,14 @@ _taskqueue_create(const char *name, int mflags,
 	queue->tq_enqueue = enqueue;
 	queue->tq_context = context;
 	queue->tq_name = tq_name;
+#ifndef __rtems__
 	queue->tq_spin = (mtxflags & MTX_SPIN) != 0;
+#else /* __rtems__ */
+	/*
+	 * FIXME: Here is a potential performance optimization.  Maybe also an
+	 * issue for correctness.
+	 */
+#endif /* __rtems__ */
 	queue->tq_flags |= TQ_FLAGS_ACTIVE;
 	if (enqueue == taskqueue_fast_enqueue ||
 	    enqueue == taskqueue_swi_enqueue ||
@@ -308,7 +333,9 @@ taskqueue_enqueue_timeout_sbt(struct taskqueue *queue,
 	TQ_LOCK(queue);
 	KASSERT(timeout_task->q == NULL || timeout_task->q == queue,
 	    ("Migrated queue"));
+#ifndef __rtems__
 	KASSERT(!queue->tq_spin, ("Timeout for spin-queue"));
+#endif /* __rtems__ */
 	timeout_task->q = queue;
 	res = timeout_task->t.ta_pending;
 	if (timeout_task->f & DT_DRAIN_IN_PROGRESS) {
@@ -562,8 +589,10 @@ void
 taskqueue_drain(struct taskqueue *queue, struct task *task)
 {
 
+#ifndef __rtems__
 	if (!queue->tq_spin)
 		WITNESS_WARN(WARN_GIANTOK | WARN_SLEEPOK, NULL, __func__);
+#endif /* __rtems__ */
 
 	TQ_LOCK(queue);
 	while (task->ta_pending != 0 || task_is_running(queue, task))
@@ -575,8 +604,10 @@ void
 taskqueue_drain_all(struct taskqueue *queue)
 {
 
+#ifndef __rtems__
 	if (!queue->tq_spin)
 		WITNESS_WARN(WARN_GIANTOK | WARN_SLEEPOK, NULL, __func__);
+#endif /* __rtems__ */
 
 	TQ_LOCK(queue);
 	(void)taskqueue_drain_tq_queue(queue);
@@ -690,6 +721,7 @@ _taskqueue_start_threads(struct taskqueue **tqp, int count, int pri,
 		tq->tq_threads = NULL;
 		return (ENOMEM);
 	}
+#ifndef __rtems__
 	for (i = 0; i < count; i++) {
 		if (tq->tq_threads[i] == NULL)
 			continue;
@@ -712,6 +744,9 @@ _taskqueue_start_threads(struct taskqueue **tqp, int count, int pri,
 		sched_add(td, SRQ_BORING);
 		thread_unlock(td);
 	}
+#else /* __rtems__ */
+	(void) td;
+#endif /* __rtems__ */
 
 	return (0);
 }

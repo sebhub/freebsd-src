@@ -105,6 +105,7 @@ __FBSDID("$FreeBSD$");
 #error "SCSI_DELAY is in milliseconds, not seconds!  Please use a larger value"
 #endif
 
+#ifndef __rtems__
 int scsi_delay;
 
 static int	ascentrycomp(const void *key, const void *member);
@@ -3739,6 +3740,7 @@ scsi_find_desc(struct scsi_sense_data_desc *sense, u_int sense_len,
 
 	return ((uint8_t *)desc_info.header);
 }
+#endif /* __rtems__ */
 
 /*
  * Fill in SCSI descriptor sense data with the specified parameters.
@@ -4038,6 +4040,7 @@ scsi_set_sense_data_len(struct scsi_sense_data *sense_data, u_int *sense_len,
 	va_end(ap);
 }
 
+#ifndef __rtems__
 /*
  * Get sense information for three similar sense data types.
  */
@@ -5225,6 +5228,7 @@ scsi_extract_sense_ccb(union ccb *ccb,
 		return (0);
 	return (1);
 }
+#endif /* __rtems__ */
 
 /*
  * Extract basic sense information.  If show_errors is set, sense values
@@ -5318,6 +5322,7 @@ scsi_get_sense_key(struct scsi_sense_data *sense_data, u_int sense_len,
 	return (sense_key);
 }
 
+#ifndef __rtems__
 int
 scsi_get_asc(struct scsi_sense_data *sense_data, u_int sense_len,
 	     int show_errors)
@@ -5341,6 +5346,7 @@ scsi_get_ascq(struct scsi_sense_data *sense_data, u_int sense_len,
 
 	return (ascq);
 }
+#endif /* __rtems__ */
 
 /*
  * This function currently requires at least 36 bytes, or
@@ -5493,6 +5499,7 @@ scsi_print_inquiry_short(struct scsi_inquiry_data *inq_data)
 	sbuf_putbuf(&sb);
 }
 
+#ifndef __rtems__
 /*
  * Table of syncrates that don't follow the "divisible by 4"
  * rule. This table will be expanded in future SCSI specs.
@@ -5575,6 +5582,7 @@ scsi_calc_syncparam(u_int period)
 	 */
 	return (period/400);
 }
+#endif /* __rtems__ */
 
 int
 scsi_devid_is_naa_ieee_reg(uint8_t *bufp)
@@ -7884,6 +7892,7 @@ scsi_read_capacity(struct ccb_scsiio *csio, u_int32_t retries,
 	scsi_cmd->opcode = READ_CAPACITY;
 }
 
+#ifndef __rtems__
 void
 scsi_read_capacity_16(struct ccb_scsiio *csio, uint32_t retries,
 		      void (*cbfcnp)(struct cam_periph *, union ccb *),
@@ -8089,6 +8098,7 @@ scsi_synchronize_cache(struct ccb_scsiio *csio, u_int32_t retries,
 	scsi_ulto4b(begin_lba, scsi_cmd->begin_lba);
 	scsi_ulto2b(lb_count, scsi_cmd->lb_count);
 }
+#endif /* __rtems__ */
 
 void
 scsi_read_write(struct ccb_scsiio *csio, u_int32_t retries,
@@ -8273,6 +8283,7 @@ scsi_write_same(struct ccb_scsiio *csio, u_int32_t retries,
 		      timeout);
 }
 
+#ifndef __rtems__
 void
 scsi_ata_identify(struct ccb_scsiio *csio, u_int32_t retries,
 		  void (*cbfcnp)(struct cam_periph *, union ccb *),
@@ -9256,3 +9267,4 @@ set_scsi_delay(int delay)
 	return (0);
 }
 #endif /* _KERNEL */
+#endif /* __rtems__ */

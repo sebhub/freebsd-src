@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*	$OpenBSD: print-cnfp.c,v 1.2 1998/06/25 20:26:59 mickey Exp $	*/
 
 /*
@@ -472,3 +476,6 @@ trunc:
 	ND_PRINT((ndo, "[|cnfp]"));
 	return;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-cnfp-data.h"
+#endif /* __rtems__ */

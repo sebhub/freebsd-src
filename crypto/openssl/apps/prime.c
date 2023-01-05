@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-openssl-namespace.h"
+#endif /* __rtems__ */
+
 /*
  * Copyright 2004-2018 The OpenSSL Project Authors. All Rights Reserved.
  *
@@ -131,3 +136,6 @@ opthelp:
     BN_free(bn);
     return ret;
 }
+#ifdef __rtems__
+#include "rtems-bsd-openssl-prime-data.h"
+#endif /* __rtems__ */

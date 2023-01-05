@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2001
  *	Fortress Technologies, Inc.  All rights reserved.
@@ -2807,7 +2811,7 @@ print_radiotap_field(netdissect_options *ndo,
 		uint8_t known;
 		uint8_t flags;
 		uint8_t mcs_index;
-		static const char *ht_bandwidth[4] = {
+		static const char * const ht_bandwidth[4] = {
 			"20 MHz",
 			"40 MHz",
 			"20 MHz (L)",
@@ -2927,7 +2931,7 @@ print_radiotap_field(netdissect_options *ndo,
 		uint8_t coding;
 		uint8_t group_id;
 		uint16_t partial_aid;
-		static const char *vht_bandwidth[32] = {
+		static const char * const vht_bandwidth[32] = {
 			"20 MHz",
 			"40 MHz",
 			"20 MHz (L)",
@@ -3376,3 +3380,6 @@ ieee802_11_radio_avs_if_print(netdissect_options *ndo,
 {
 	return ieee802_11_avs_radio_print(ndo, p, h->len, h->caplen);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-802_11-data.h"
+#endif /* __rtems__ */

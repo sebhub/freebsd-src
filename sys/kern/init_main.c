@@ -97,10 +97,13 @@ __FBSDID("$FreeBSD$");
 
 void mi_startup(void);				/* Should be elsewhere */
 
+#ifndef __rtems__
 /* Components of the first process -- never freed. */
 static struct session session0;
 static struct pgrp pgrp0;
+#endif /* __rtems__ */
 struct	proc proc0;
+#ifndef __rtems__
 struct thread0_storage thread0_st __aligned(32);
 struct	vmspace vmspace0;
 struct	proc *initproc;
@@ -118,6 +121,7 @@ SYSCTL_INT(_debug, OID_AUTO, boothowto, CTLFLAG_RD, &boothowto, 0,
 int	bootverbose = BOOTVERBOSE;
 SYSCTL_INT(_debug, OID_AUTO, bootverbose, CTLFLAG_RW, &bootverbose, 0,
 	"Control the output of verbose kernel messages");
+#endif /* __rtems__ */
 
 #ifdef VERBOSE_SYSINIT
 /*
@@ -131,6 +135,7 @@ int	verbose_sysinit = VERBOSE_SYSINIT;
 TUNABLE_INT("debug.verbose_sysinit", &verbose_sysinit);
 #endif
 
+#ifndef __rtems__
 #ifdef INVARIANTS
 FEATURE(invariants, "Kernel compiled with INVARIANTS, may affect performance");
 #endif
@@ -189,6 +194,14 @@ sysinit_add(struct sysinit **set, struct sysinit **set_end)
 	newsysinit = newset;
 	newsysinit_end = newset + count;
 }
+#else /* __rtems__ */
+#ifdef BOOTVERBOSE
+int	bootverbose = 1;
+SYSCTL_INT(_debug, OID_AUTO, bootverbose, CTLFLAG_RW, &bootverbose, 0,
+	"Control the output of verbose kernel messages");
+#endif
+RWSET_DECLARE(sysinit_set, struct sysinit);
+#endif /* __rtems__ */
 
 #if defined (DDB) && defined(VERBOSE_SYSINIT)
 static const char *
@@ -226,6 +239,10 @@ mi_startup(void)
 	struct sysinit **sipp;	/* system initialization*/
 	struct sysinit **xipp;	/* interior loop of sort*/
 	struct sysinit *save;	/* bubble*/
+#ifdef __rtems__
+	struct sysinit **sysinit = NULL;
+	struct sysinit **sysinit_end = NULL;
+#endif /* __rtems__ */
 
 #if defined(VERBOSE_SYSINIT)
 	int last;
@@ -234,15 +251,19 @@ mi_startup(void)
 
 	TSENTER();
 
+#ifndef __rtems__
 	if (boothowto & RB_VERBOSE)
 		bootverbose++;
+#endif /* __rtems__ */
 
 	if (sysinit == NULL) {
 		sysinit = SET_BEGIN(sysinit_set);
 		sysinit_end = SET_LIMIT(sysinit_set);
 	}
 
+#ifndef __rtems__
 restart:
+#endif /* __rtems__ */
 	/*
 	 * Perform a bubble sort of the system initialization objects by
 	 * their subsystem (primary key) and order (secondary key).
@@ -315,6 +336,7 @@ restart:
 		/* Check off the one we're just done */
 		(*sipp)->subsystem = SI_SUB_DONE;
 
+#ifndef __rtems__
 		/* Check if we've installed more sysinit items via KLD */
 		if (newsysinit != NULL) {
 			if (sysinit != SET_BEGIN(sysinit_set))
@@ -325,20 +347,28 @@ restart:
 			newsysinit_end = NULL;
 			goto restart;
 		}
+#endif /* __rtems__ */
 	}
 
 	TSEXIT();	/* Here so we don't overlap with start_init. */
 
+#ifndef __rtems__
 	mtx_assert(&Giant, MA_OWNED | MA_NOTRECURSED);
 	mtx_unlock(&Giant);
+#else /* __rtems__ */
+	/* Giant is unlocked in rtems_bsd_timeout_init_late() */
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 	/*
 	 * Now hand over this thread to swapper.
 	 */
 	swapper();
 	/* NOTREACHED*/
+#endif /* __rtems__ */
 }
 
+#ifndef __rtems__
 static void
 print_caddr_t(void *data)
 {
@@ -884,3 +914,4 @@ kick_init(const void *udata __unused)
 	thread_unlock(td);
 }
 SYSINIT(kickinit, SI_SUB_KTHREAD_INIT, SI_ORDER_MIDDLE, kick_init, NULL);
+#endif /* __rtems__ */

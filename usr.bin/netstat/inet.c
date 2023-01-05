@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-netstat-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * Copyright (c) 1983, 1988, 1993, 1995
  *	The Regents of the University of California.  All rights reserved.
@@ -33,6 +37,9 @@ static char sccsid[] = "@(#)inet.c	8.5 (Berkeley) 5/24/95";
 #endif /* not lint */
 #endif
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -84,6 +91,9 @@ __FBSDID("$FreeBSD$");
 #include <libxo/xo.h>
 #include "netstat.h"
 #include "nl_defs.h"
+#ifdef __rtems__
+#include "rtems-bsd-netstat-inet-data.h"
+#endif /* __rtems__ */
 
 #ifdef INET
 static void inetprint(const char *, struct in_addr *, int, const char *, int,
@@ -196,7 +206,9 @@ sotoxsocket(struct socket *so, struct xsocket *xso)
 void
 protopr(u_long off, const char *name, int af1, int proto)
 {
+#ifndef __rtems__
 	static int first = 1;
+#endif /* __rtems__ */
 	int istcp;
 	char *buf;
 	const char *vchar;
@@ -287,7 +299,11 @@ protopr(u_long off, const char *name, int af1, int proto)
 		     ))
 			continue;
 
+#ifndef __rtems__
 		if (first) {
+#else /* __rtems__ */
+		if (protopr_first) {
+#endif /* __rtems__ */
 			if (!Lflag) {
 				xo_emit("Active Internet connections");
 				if (aflag)
@@ -344,7 +360,11 @@ protopr(u_long off, const char *name, int af1, int proto)
 			if (Pflag)
 				xo_emit(" {T:/%s}", "Log ID");
 			xo_emit("\n");
+#ifndef __rtems__
 			first = 0;
+#else /* __rtems__ */
+			protopr_first = 0;
+#endif /* __rtems__ */
 		}
 		if (Lflag && so->so_qlimit == 0)
 			continue;
@@ -1064,7 +1084,11 @@ arp_stats(u_long off, const char *name, int af1 __unused, int proto __unused)
 
 
 
+#ifndef __rtems__
 static	const char *icmpnames[ICMP_MAXTYPE + 1] = {
+#else /* __rtems__ */
+static	const char *const icmpnames[ICMP_MAXTYPE + 1] = {
+#endif /* __rtems__ */
 	"echo reply",			/* RFC 792 */
 	"#1",
 	"#2",

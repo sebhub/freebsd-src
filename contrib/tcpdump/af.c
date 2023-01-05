@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1998-2006 The TCPDUMP project
  *
@@ -56,3 +60,6 @@ const struct tok bsd_af_values[] = {
     { BSD_AFNUM_INET6_DARWIN, "IPv6" },
     { 0, NULL}
 };
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-af-data.h"
+#endif /* __rtems__ */

@@ -609,6 +609,10 @@ void inp_rlock(struct inpcb *);
 void inp_runlock(struct inpcb *);
 
 #ifdef INVARIANT_SUPPORT
+#ifdef __rtems__
+#define	inp_lock_assert _bsd_inp_lock_assert
+#define	inp_unlock_assert _bsd_inp_unlock_assert
+#endif /* __rtems__ */
 void inp_lock_assert(struct inpcb *);
 void inp_unlock_assert(struct inpcb *);
 #else

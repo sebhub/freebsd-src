@@ -50,6 +50,9 @@
 #include "common/ieee802_11_defs.h"
 #include "common/ieee802_11_common.h"
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-commands.h>
+#endif /* __rtems__ */
 
 #define MAX_ROAMING_CONS 36
 #define MAX_ROAMING_CONS_OI_LEN 15

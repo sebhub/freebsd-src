@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*	$OpenBSD: print-carp.c,v 1.6 2009/10/27 23:59:55 deraadt Exp $	*/
 
 /*
@@ -81,3 +85,6 @@ carp_print(netdissect_options *ndo, register const u_char *bp, register u_int le
 trunc:
 	ND_PRINT((ndo, "[|carp]"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-carp-data.h"
+#endif /* __rtems__ */

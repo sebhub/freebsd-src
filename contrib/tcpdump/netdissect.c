@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1988-1997
  *	The Regents of the University of California.  All rights reserved.
@@ -144,3 +148,6 @@ nd_smi_version_string(void)
 	return (NULL);
 #endif
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-netdissect-data.h"
+#endif /* __rtems__ */

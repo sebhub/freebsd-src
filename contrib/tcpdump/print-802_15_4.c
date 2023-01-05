@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2009
  * 	Siemens AG, All rights reserved.
@@ -221,3 +225,6 @@ ieee802_15_4_if_print(netdissect_options *ndo,
 
 	return hdrlen;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-802_15_4-data.h"
+#endif /* __rtems__ */

@@ -109,13 +109,17 @@ usb_process(void *arg)
 	struct thread *td;
 
 	/* in case of attach error, check for suspended */
+#ifndef __rtems__
 	USB_THREAD_SUSPEND_CHECK();
+#endif /* __rtems__ */
 
 	/* adjust priority */
 	td = curthread;
+#ifndef __rtems__
 	thread_lock(td);
 	sched_prio(td, up->up_prio);
 	thread_unlock(td);
+#endif /* __rtems__ */
 
 	USB_MTX_LOCK(up->up_mtx);
 
@@ -460,10 +464,14 @@ usb_proc_drain(struct usb_process *up)
 #ifndef EARLY_AP_STARTUP
 		/* Check if we are still cold booted */
 		if (cold) {
+#ifndef __rtems__
 			USB_THREAD_SUSPEND(up->up_ptr);
 			printf("WARNING: A USB process has "
 			    "been left suspended\n");
 			break;
+#else /* __rtems__ */
+                        BSD_ASSERT(0);
+#endif /* __rtems__ */
 		}
 #endif
 		cv_wait(&up->up_cv, up->up_mtx);

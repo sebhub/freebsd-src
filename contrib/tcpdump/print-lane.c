@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Marko Kiiskila carnil@cs.tut.fi
  *
@@ -122,3 +126,6 @@ lane_if_print(netdissect_options *ndo, const struct pcap_pkthdr *h, const u_char
 
 	return (sizeof(struct lecdatahdr_8023));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-lane-data.h"
+#endif /* __rtems__ */

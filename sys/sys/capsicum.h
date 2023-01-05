@@ -323,6 +323,7 @@
 
 __BEGIN_DECLS
 
+#ifndef __rtems__
 #define	cap_rights_init(...)						\
 	__cap_rights_init(CAP_RIGHTS_VERSION, __VA_ARGS__, 0ULL)
 cap_rights_t *__cap_rights_init(int version, cap_rights_t *rights, ...);
@@ -334,6 +335,11 @@ cap_rights_t *__cap_rights_set(cap_rights_t *rights, ...);
 #define	cap_rights_clear(...)						\
 	__cap_rights_clear(__VA_ARGS__, 0ULL)
 cap_rights_t *__cap_rights_clear(cap_rights_t *rights, ...);
+#else /* __rtems__ */
+#define	cap_rights_init(...) NULL
+#define	cap_rights_set(...) NULL
+#define	cap_rights_clear(...) NULL
+#endif /* __rtems__ */
 
 #define	cap_rights_is_set(...)						\
 	__cap_rights_is_set(__VA_ARGS__, 0ULL)
@@ -495,7 +501,16 @@ __BEGIN_DECLS
  * be limited to process-local, process-inherited, or file descriptor
  * operations.  If already in capability mode, a no-op.
  */
+#ifndef __rtems__
 int	cap_enter(void);
+#else /* __rtems__ */
+static inline int
+cap_enter(void)
+{
+
+	return (0);
+}
+#endif /* __rtems__ */
 
 /*
  * Are we sandboxed (in capability mode)?
@@ -511,7 +526,16 @@ int	cap_getmode(u_int *modep);
 /*
  * Limits capability rights for the given descriptor (CAP_*).
  */
+#ifndef __rtems__
 int cap_rights_limit(int fd, const cap_rights_t *rights);
+#else /* __rtems__ */
+static inline int
+cap_rights_limit(int fd, const cap_rights_t *rights)
+{
+
+	return (0);
+}
+#endif /* __rtems__ */
 /*
  * Returns capability rights for the given descriptor.
  */

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -34,6 +38,9 @@ static const char rcsid[] =
   "$FreeBSD$";
 #endif /* not lint */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -51,6 +58,9 @@ static const char rcsid[] =
 #include <net/ethernet.h>
 
 #include "ifconfig.h"
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-af_link-data.h"
+#endif /* __rtems__ */
 
 static struct ifreq link_ridreq;
 
@@ -193,7 +203,11 @@ static struct afswtch af_lladdr = {
 	.af_addreq	= &link_ridreq,
 };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+void
+#endif /* __rtems__ */
 link_ctor(void)
 {
 	af_register(&af_link);

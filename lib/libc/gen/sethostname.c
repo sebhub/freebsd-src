@@ -39,7 +39,11 @@ __FBSDID("$FreeBSD$");
 #include <unistd.h>
 
 int
+#ifndef __rtems__
 sethostname(const char *name, int namelen)
+#else /* __rtems__ */
+sethostname(const char *name, size_t namelen)
+#endif /* __rtems__ */
 {
 	int mib[2];
 

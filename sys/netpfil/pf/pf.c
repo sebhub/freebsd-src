@@ -3084,8 +3084,13 @@ pf_socket_lookup(int direction, struct pf_pdesc *pd, struct mbuf *m)
 		return (-1);
 	}
 	INP_RLOCK_ASSERT(inp);
+#ifndef __rtems__
 	pd->lookup.uid = inp->inp_cred->cr_uid;
 	pd->lookup.gid = inp->inp_cred->cr_groups[0];
+#else /* __rtems__ */
+	pd->lookup.uid = BSD_DEFAULT_UID;
+	pd->lookup.gid = BSD_DEFAULT_GID;
+#endif /* __rtems__ */
 	INP_RUNLOCK(inp);
 
 	return (1);
@@ -3269,8 +3274,13 @@ pf_test_rule(struct pf_rule **rm, struct pf_state **sm, int direction,
 
 	if (inp != NULL) {
 		INP_LOCK_ASSERT(inp);
+#ifndef __rtems__
 		pd->lookup.uid = inp->inp_cred->cr_uid;
 		pd->lookup.gid = inp->inp_cred->cr_groups[0];
+#else /* __rtems__ */
+		pd->lookup.uid = BSD_DEFAULT_UID;
+		pd->lookup.gid = BSD_DEFAULT_GID;
+#endif /* __rtems__ */
 		pd->lookup.done = 1;
 	}
 

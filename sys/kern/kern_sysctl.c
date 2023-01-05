@@ -183,6 +183,7 @@ sysctl_root_handler_locked(struct sysctl_oid *oid, void *arg1, intmax_t arg2,
 	return (error);
 }
 
+#ifndef __rtems__
 static void
 sysctl_load_tunable_by_oid_locked(struct sysctl_oid *oidp)
 {
@@ -321,6 +322,7 @@ sysctl_load_tunable_by_oid_locked(struct sysctl_oid *oidp)
 	if (penv != NULL)
 		freeenv(penv);
 }
+#endif /* __rtems__ */
 
 static int
 sbuf_printf_drain(void *arg __unused, const char *data, int len)
@@ -503,8 +505,10 @@ retry:
 	    (oidp->oid_kind & CTLFLAG_NOFETCH) == 0) {
 		/* only fetch value once */
 		oidp->oid_kind |= CTLFLAG_NOFETCH;
+#ifndef __rtems__
 		/* try to fetch value from kernel environment */
 		sysctl_load_tunable_by_oid_locked(oidp);
+#endif /* __rtems__ */
 	}
 }
 
@@ -1669,6 +1673,7 @@ sysctl_handle_string(SYSCTL_HANDLER_ARGS)
 int
 sysctl_handle_opaque(SYSCTL_HANDLER_ARGS)
 {
+#ifndef __rtems__
 	int error, tries;
 	u_int generation;
 	struct sysctl_req req2;
@@ -1684,14 +1689,19 @@ sysctl_handle_opaque(SYSCTL_HANDLER_ARGS)
 	req2 = *req;
 retry:
 	generation = curthread->td_generation;
+#else /* __rtems__ */
+	int error;
+#endif /* __rtems__ */
 	error = SYSCTL_OUT(req, arg1, arg2);
 	if (error)
 		return (error);
+#ifndef __rtems__
 	tries++;
 	if (generation != curthread->td_generation && tries < 3) {
 		*req = req2;
 		goto retry;
 	}
+#endif /* __rtems__ */
 
 	error = SYSCTL_IN(req, arg1, arg2);
 
@@ -1761,14 +1771,22 @@ sysctl_new_kernel(struct sysctl_req *req, void *p, size_t l)
 
 int
 kernel_sysctl(struct thread *td, int *name, u_int namelen, void *old,
+#ifndef __rtems__
     size_t *oldlenp, void *new, size_t newlen, size_t *retval, int flags)
+#else /* __rtems__ */
+    size_t *oldlenp, const void *new, size_t newlen, size_t *retval, int flags)
+#endif /* __rtems__ */
 {
 	int error = 0;
 	struct sysctl_req req;
 
 	bzero(&req, sizeof req);
 
+#ifndef __rtems__
 	req.td = td;
+#else /* __rtems__ */
+	req.td = curthread;
+#endif /* __rtems__ */
 	req.flags = flags;
 
 	if (oldlenp) {
@@ -1806,6 +1824,7 @@ kernel_sysctl(struct thread *td, int *name, u_int namelen, void *old,
 	return (error);
 }
 
+#ifndef __rtems__
 int
 kernel_sysctlbyname(struct thread *td, char *name, void *old, size_t *oldlenp,
     void *new, size_t newlen, size_t *retval, int flags)
@@ -1827,6 +1846,7 @@ kernel_sysctlbyname(struct thread *td, char *name, void *old, size_t *oldlenp,
 	    new, newlen, retval, flags);
 	return (error);
 }
+#endif /* __rtems__ */
 
 /*
  * Transfer function to/from user space.
@@ -1869,6 +1889,7 @@ sysctl_old_user(struct sysctl_req *req, const void *p, size_t l)
 	return (0);
 }
 
+#ifndef __rtems__
 static int
 sysctl_new_user(struct sysctl_req *req, void *p, size_t l)
 {
@@ -1884,6 +1905,7 @@ sysctl_new_user(struct sysctl_req *req, void *p, size_t l)
 	req->newidx += l;
 	return (error);
 }
+#endif /* __rtems__ */
 
 /*
  * Wire the user space destination buffer.  If set to a value greater than
@@ -1995,6 +2017,7 @@ sysctl_root(SYSCTL_HANDLER_ARGS)
 		goto out;
 	}
 
+#ifndef __rtems__
 	KASSERT(req->td != NULL, ("sysctl_root(): req->td == NULL"));
 
 #ifdef CAPABILITY_MODE
@@ -2036,6 +2059,9 @@ sysctl_root(SYSCTL_HANDLER_ARGS)
 		if (error)
 			goto out;
 	}
+#else /* __rtems__ */
+	(void) lvl;
+#endif /* __rtems__ */
 
 	if (!oid->oid_handler) {
 		error = EINVAL;
@@ -2066,6 +2092,7 @@ out:
 	return (error);
 }
 
+#ifndef __rtems__
 #ifndef _SYS_SYSPROTO_H_
 struct sysctl_args {
 	int	*name;
@@ -2178,6 +2205,7 @@ userland_sysctl(struct thread *td, int *name, u_int namelen, void *old,
 	}
 	return (error);
 }
+#endif /* __rtems__ */
 
 /*
  * Drain into a sysctl struct.  The user buffer should be wired if a page

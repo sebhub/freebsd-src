@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*-
  * Copyright (c) 2003, 2004 David Young.  All rights reserved.
  *
@@ -153,3 +157,6 @@ cpack_uint8(struct cpack_state *cs, uint8_t *u)
 	cs->c_next++;
 	return 0;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-cpack-data.h"
+#endif /* __rtems__ */

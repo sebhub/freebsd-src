@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1990, 1991, 1993, 1994, 1995, 1996
  *	The Regents of the University of California.  All rights reserved.
@@ -148,8 +152,8 @@ char *
 q922_string(netdissect_options *ndo, const u_char *p, u_int length)
 {
 
-    static u_int dlci, addr_len;
-    static uint8_t flags[4];
+    u_int dlci, addr_len;
+    uint8_t flags[4];
     static char buffer[sizeof("DLCI xxxxxxxxxx")];
     memset(buffer, 0, sizeof(buffer));
 
@@ -1149,3 +1153,6 @@ fr_q933_print_ie_codeset_0_5(netdissect_options *ndo, u_int iecode,
  * c-basic-offset: 8
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-fr-data.h"
+#endif /* __rtems__ */

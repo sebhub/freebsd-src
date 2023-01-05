@@ -61,8 +61,10 @@ void	warnc(int, const char *, ...) __printf0like(2, 3);
 void	vwarnc(int, const char *, __va_list) __printf0like(2, 0);
 void	warnx(const char *, ...) __printflike(1, 2);
 void	vwarnx(const char *, __va_list) __printf0like(1, 0);
+#ifndef __rtems__
 void	err_set_file(void *);
 void	err_set_exit(void (* _Nullable)(int));
+#endif /* __rtems__ */
 __END_DECLS
 __NULLABILITY_PRAGMA_POP
 

@@ -37,6 +37,7 @@
 #include <sys/cdefs.h>
 #include <machine/_limits.h>
 
+#ifndef __rtems__
 #define	CHAR_BIT	__CHAR_BIT	/* number of bits in a char */
 
 #define	SCHAR_MAX	__SCHAR_MAX	/* max value for a signed char */
@@ -80,6 +81,7 @@
 #define	OFF_MAX		__OFF_MAX	/* max value for an off_t */
 #define	OFF_MIN		__OFF_MIN	/* min value for an off_t */
 #endif
+#endif /* __rtems__ */
 
 #if __BSD_VISIBLE
 #define	GID_MAX		UINT_MAX	/* max value for a gid_t */
@@ -90,6 +92,7 @@
 #define	QUAD_MIN	(__QUAD_MIN)	/* min value for a quad_t */
 #endif
 
+#ifndef __rtems__
 #if __XSI_VISIBLE || __POSIX_VISIBLE >= 200809
 #define	LONG_BIT	__LONG_BIT
 #define	WORD_BIT	__WORD_BIT
@@ -98,5 +101,6 @@
 #if __POSIX_VISIBLE
 #define	MQ_PRIO_MAX	64
 #endif
+#endif /* __rtems__ */
 
 #endif /* !_SYS_LIMITS_H_ */

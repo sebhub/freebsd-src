@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2016 Antonin Décimo, Jean-Raphaël Gaglione
  *
@@ -159,6 +163,9 @@ static const char *
 format_nid(const u_char *data)
 {
     static char buf[4][sizeof("01:01:01:01")];
+#ifdef __rtems__
+	__section(".rtemsrwset.bsd_prog_tcpdump.content")
+#endif /* __rtems__ */
     static int i = 0;
     i = (i + 1) % 4;
     snprintf(buf[i], sizeof(buf[i]), "%02x:%02x:%02x:%02x",
@@ -170,6 +177,9 @@ static const char *
 format_256(const u_char *data)
 {
     static char buf[4][sizeof("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")];
+#ifdef __rtems__
+	__section(".rtemsrwset.bsd_prog_tcpdump.content")
+#endif /* __rtems__ */
     static int i = 0;
     i = (i + 1) % 4;
     snprintf(buf[i], sizeof(buf[i]), "%016" PRIx64 "%016" PRIx64 "%016" PRIx64 "%016" PRIx64,
@@ -185,6 +195,9 @@ static const char *
 format_interval(const uint32_t n)
 {
     static char buf[4][sizeof("0000000.000s")];
+#ifdef __rtems__
+	__section(".rtemsrwset.bsd_prog_tcpdump.content")
+#endif /* __rtems__ */
     static int i = 0;
     i = (i + 1) % 4;
     snprintf(buf[i], sizeof(buf[i]), "%u.%03us", n / 1000, n % 1000);
@@ -863,3 +876,6 @@ hncp_print_rec(netdissect_options *ndo,
     ND_PRINT((ndo, "%s", istr));
     return;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-hncp-data.h"
+#endif /* __rtems__ */

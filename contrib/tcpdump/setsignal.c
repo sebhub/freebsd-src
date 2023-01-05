@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -73,8 +77,10 @@ RETSIGTYPE
 
 	memset(&new, 0, sizeof(new));
 	new.sa_handler = func;
+#ifndef __rtems__
 	if (sig == SIGCHLD)
 		new.sa_flags = SA_RESTART;
+#endif /* __rtems__ */
 	if (sigaction(sig, &new, &old) < 0)
 		return (SIG_ERR);
 	return (old.sa_handler);
@@ -88,3 +94,6 @@ RETSIGTYPE
 #endif
 }
 
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-setsignal-data.h"
+#endif /* __rtems__ */

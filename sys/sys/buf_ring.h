@@ -93,7 +93,7 @@ buf_ring_enqueue(struct buf_ring *br, void *buf)
 			}
 			continue;
 		}
-	} while (!atomic_cmpset_acq_int(&br->br_prod_head, prod_head, prod_next));
+	} while (!atomic_cmpset_acq_32(&br->br_prod_head, prod_head, prod_next));
 #ifdef DEBUG_BUFRING
 	if (br->br_ring[prod_head] != NULL)
 		panic("dangling value in enqueue");
@@ -107,7 +107,7 @@ buf_ring_enqueue(struct buf_ring *br, void *buf)
 	 */   
 	while (br->br_prod_tail != prod_head)
 		cpu_spinwait();
-	atomic_store_rel_int(&br->br_prod_tail, prod_next);
+	atomic_store_rel_32(&br->br_prod_tail, prod_next);
 	critical_exit();
 	return (0);
 }
@@ -131,7 +131,7 @@ buf_ring_dequeue_mc(struct buf_ring *br)
 			critical_exit();
 			return (NULL);
 		}
-	} while (!atomic_cmpset_acq_int(&br->br_cons_head, cons_head, cons_next));
+	} while (!atomic_cmpset_acq_32(&br->br_cons_head, cons_head, cons_next));
 
 	buf = br->br_ring[cons_head];
 #ifdef DEBUG_BUFRING
@@ -145,7 +145,7 @@ buf_ring_dequeue_mc(struct buf_ring *br)
 	while (br->br_cons_tail != cons_head)
 		cpu_spinwait();
 
-	atomic_store_rel_int(&br->br_cons_tail, cons_next);
+	atomic_store_rel_32(&br->br_cons_tail, cons_next);
 	critical_exit();
 
 	return (buf);
@@ -269,11 +269,11 @@ buf_ring_advance_sc(struct buf_ring *br)
  * the compare and an atomic.
  */
 static __inline void
-buf_ring_putback_sc(struct buf_ring *br, void *new)
+buf_ring_putback_sc(struct buf_ring *br, void *new_item)
 {
 	KASSERT(br->br_cons_head != br->br_prod_tail, 
 		("Buf-Ring has none in putback")) ;
-	br->br_ring[br->br_cons_head] = new;
+	br->br_ring[br->br_cons_head] = new_item;
 }
 
 /*

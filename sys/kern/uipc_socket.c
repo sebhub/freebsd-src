@@ -102,6 +102,9 @@
  * sopoll() currently does not need a VNET context to be set.
  */
 
+#ifdef __rtems__
+#include <sys/file.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -198,8 +201,10 @@ MALLOC_DEFINE(M_PCB, "pcb", "protocol control block");
 	VNET_ASSERT(curvnet != NULL,					\
 	    ("%s:%d curvnet is NULL, so=%p", __func__, __LINE__, (so)));
 
+#ifndef __rtems__
 VNET_DEFINE(struct hhook_head *, socket_hhh[HHOOK_SOCKET_LAST + 1]);
 #define	V_socket_hhh		VNET(socket_hhh)
+#endif /* __rtems__ */
 
 /*
  * Limit on the number of connections in the listen queue waiting
@@ -271,6 +276,7 @@ SYSCTL_NODE(_kern, KERN_IPC, ipc, CTLFLAG_RW, 0, "IPC");
 static uma_zone_t socket_zone;
 int	maxsockets;
 
+#ifndef __rtems__
 static void
 socket_zone_change(void *tag)
 {
@@ -295,6 +301,7 @@ socket_hhook_deregister(int subtype)
 	if (hhook_head_deregister(V_socket_hhh[subtype]) != 0)
 		printf("%s: WARNING: unable to deregister hook\n", __func__);
 }
+#endif /* __rtems__ */
 
 static void
 socket_init(void *tag)
@@ -304,11 +311,14 @@ socket_init(void *tag)
 	    NULL, NULL, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
 	maxsockets = uma_zone_set_max(socket_zone, maxsockets);
 	uma_zone_set_warning(socket_zone, "kern.ipc.maxsockets limit reached");
+#ifndef __rtems__
 	EVENTHANDLER_REGISTER(maxsockets_change, socket_zone_change, NULL,
 	    EVENTHANDLER_PRI_FIRST);
+#endif /* __rtems__ */
 }
 SYSINIT(socket, SI_SUB_PROTO_DOMAININIT, SI_ORDER_ANY, socket_init, NULL);
 
+#ifndef __rtems__
 static void
 socket_vnet_init(const void *unused __unused)
 {
@@ -331,6 +341,7 @@ socket_vnet_uninit(const void *unused __unused)
 }
 VNET_SYSUNINIT(socket_vnet_uninit, SI_SUB_PROTO_DOMAININIT, SI_ORDER_ANY,
     socket_vnet_uninit, NULL);
+#endif /* __rtems__ */
 
 /*
  * Initialise maxsockets.  This SYSINIT must be run after
@@ -360,7 +371,9 @@ sysctl_maxsockets(SYSCTL_HANDLER_ARGS)
 		if (newmaxsockets > maxsockets &&
 		    newmaxsockets <= maxfiles) {
 			maxsockets = newmaxsockets;
+#ifndef __rtems__
 			EVENTHANDLER_INVOKE(maxsockets_change);
+#endif /* __rtems__ */
 		} else
 			error = EINVAL;
 	}
@@ -415,10 +428,12 @@ soalloc(struct vnet *vnet)
 	so->so_snd.sb_sel = &so->so_wrsel;
 	sx_init(&so->so_snd.sb_sx, "so_snd_sx");
 	sx_init(&so->so_rcv.sb_sx, "so_rcv_sx");
+#ifndef __rtems__
 	TAILQ_INIT(&so->so_snd.sb_aiojobq);
 	TAILQ_INIT(&so->so_rcv.sb_aiojobq);
 	TASK_INIT(&so->so_snd.sb_aiotask, 0, soaio_snd, so);
 	TASK_INIT(&so->so_rcv.sb_aiotask, 0, soaio_rcv, so);
+#endif /* __rtems__ */
 #ifdef VIMAGE
 	VNET_ASSERT(vnet != NULL, ("%s:%d vnet is NULL, so=%p",
 	    __func__, __LINE__, so));
@@ -532,7 +547,11 @@ socreate(int dom, struct socket **aso, int type, int proto,
 	if ((prp->pr_domain->dom_family == PF_INET) ||
 	    (prp->pr_domain->dom_family == PF_INET6) ||
 	    (prp->pr_domain->dom_family == PF_ROUTE))
+#ifndef __rtems__
 		so->so_fibnum = td->td_proc->p_fibnum;
+#else /* __rtems__ */
+		so->so_fibnum = BSD_DEFAULT_FIB;
+#endif /* __rtems__ */
 	else
 		so->so_fibnum = 0;
 	so->so_proto = prp;
@@ -1299,8 +1318,10 @@ sosend_dgram(struct socket *so, struct sockaddr *addr, struct uio *uio,
 
 	dontroute =
 	    (flags & MSG_DONTROUTE) && (so->so_options & SO_DONTROUTE) == 0;
+#ifndef __rtems__
 	if (td != NULL)
 		td->td_ru.ru_msgsnd++;
+#endif /* __rtems__ */
 	if (control != NULL)
 		clen = control->m_len;
 
@@ -1465,8 +1486,10 @@ sosend_generic(struct socket *so, struct sockaddr *addr, struct uio *uio,
 	dontroute =
 	    (flags & MSG_DONTROUTE) && (so->so_options & SO_DONTROUTE) == 0 &&
 	    (so->so_proto->pr_flags & PR_ATOMIC);
+#ifndef __rtems__
 	if (td != NULL)
 		td->td_ru.ru_msgsnd++;
+#endif /* __rtems__ */
 	if (control != NULL)
 		clen = control->m_len;
 
@@ -1833,8 +1856,10 @@ dontblock:
 	 * readers from pulling off the front of the socket buffer.
 	 */
 	SOCKBUF_LOCK_ASSERT(&so->so_rcv);
+#ifndef __rtems__
 	if (uio->uio_td)
 		uio->uio_td->td_ru.ru_msgrcv++;
+#endif /* __rtems__ */
 	KASSERT(m == so->so_rcv.sb_mb, ("soreceive: m != so->so_rcv.sb_mb"));
 	SBLASTRECORDCHK(&so->so_rcv);
 	SBLASTMBUFCHK(&so->so_rcv);
@@ -2272,8 +2297,10 @@ deliver:
 	KASSERT(sb->sb_mb != NULL, ("%s: sb_mb == NULL", __func__));
 
 	/* Statistics. */
+#ifndef __rtems__
 	if (uio->uio_td)
 		uio->uio_td->td_ru.ru_msgrcv++;
+#endif /* __rtems__ */
 
 	/* Fill uio until full or current end of socket buffer is reached. */
 	len = min(uio->uio_resid, sbavail(sb));
@@ -2442,8 +2469,10 @@ soreceive_dgram(struct socket *so, struct sockaddr **psa, struct uio *uio,
 	}
 	SOCKBUF_LOCK_ASSERT(&so->so_rcv);
 
+#ifndef __rtems__
 	if (uio->uio_td)
 		uio->uio_td->td_ru.ru_msgrcv++;
+#endif /* __rtems__ */
 	SBLASTRECORDCHK(&so->so_rcv);
 	SBLASTMBUFCHK(&so->so_rcv);
 	nextrecord = m->m_nextpkt;
@@ -2676,6 +2705,7 @@ sorflush(struct socket *so)
 static int inline
 hhook_run_socket(struct socket *so, void *hctx, int32_t h_id)
 {
+#ifndef __rtems__
 	struct socket_hhook_data hhook_data = {
 		.so = so,
 		.hctx = hctx,
@@ -2689,6 +2719,9 @@ hhook_run_socket(struct socket *so, void *hctx, int32_t h_id)
 
 	/* Ugly but needed, since hhooks return void for now */
 	return (hhook_data.status);
+#else /* __rtems__ */
+	return (0);
+#endif /* __rtems__ */
 }
 
 /*
@@ -2931,10 +2964,12 @@ sosetopt(struct socket *so, struct sockopt *sopt)
 			break;
 
 		default:
+#ifndef __rtems__
 			if (V_socket_hhh[HHOOK_SOCKET_OPT]->hhh_nhooks > 0)
 				error = hhook_run_socket(so, sopt,
 				    HHOOK_SOCKET_OPT);
 			else
+#endif /* __rtems__ */
 				error = ENOPROTOOPT;
 			break;
 		}
@@ -3135,10 +3170,12 @@ integer:
 			goto integer;
 
 		default:
+#ifndef __rtems__
 			if (V_socket_hhh[HHOOK_SOCKET_OPT]->hhh_nhooks > 0)
 				error = hhook_run_socket(so, sopt,
 				    HHOOK_SOCKET_OPT);
 			else
+#endif /* __rtems__ */
 				error = ENOPROTOOPT;
 			break;
 		}
@@ -3268,8 +3305,10 @@ void
 sohasoutofband(struct socket *so)
 {
 
+#ifndef __rtems__
 	if (so->so_sigio != NULL)
 		pgsigio(&so->so_sigio, SIGURG, 0);
+#endif /* __rtems__ */
 	selwakeuppri(&so->so_rdsel, PSOCK);
 }
 
@@ -3666,6 +3705,7 @@ filt_soempty(struct knote *kn, long hint)
 		return (0);
 }
 
+#ifndef __rtems__
 int
 socheckuid(struct socket *so, uid_t uid)
 {
@@ -3676,6 +3716,7 @@ socheckuid(struct socket *so, uid_t uid)
 		return (EPERM);
 	return (0);
 }
+#endif /* __rtems__ */
 
 /*
  * These functions are used by protocols to notify the socket layer (and its
@@ -4026,7 +4067,11 @@ sotoxsocket(struct socket *so, struct xsocket *xso)
 	xso->xso_family = so->so_proto->pr_domain->dom_family;
 	xso->so_timeo = so->so_timeo;
 	xso->so_error = so->so_error;
+#ifndef __rtems__
 	xso->so_uid = so->so_cred->cr_uid;
+#else /* __rtems__ */
+	xso->so_uid = BSD_DEFAULT_UID;
+#endif /* __rtems__ */
 	xso->so_pgid = so->so_sigio ? so->so_sigio->sio_pgid : 0;
 	if (SOLISTENING(so)) {
 		xso->so_qlen = so->sol_qlen;

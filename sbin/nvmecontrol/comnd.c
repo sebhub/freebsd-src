@@ -25,6 +25,11 @@
  * SUCH DAMAGE.
  */
 
+#ifdef __rtems__
+#define __need_getopt_newlib
+#include <getopt.h>
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -180,6 +185,16 @@ arg_parse(int argc, char * const * argv, const struct cmd *f)
 	char *shortopts, *p;
 	const struct opts *opts = f->opts;
 	const struct args *args = f->args;
+#ifdef __rtems__
+	struct getopt_data getopt_data;
+	memset(&getopt_data, 0, sizeof(getopt_data));
+#define optind getopt_data.optind
+#define optarg getopt_data.optarg
+#define opterr getopt_data.opterr
+#define optopt getopt_data.optopt
+#define getopt_long(argc, argv, shortopts, longopts, longind) \
+    getopt_long_r(argc, argv, shortopts, longopts, longind, &getopt_data)
+#endif /* __rtems__ */
 
 	if (opts == NULL)
 		n = 0;
@@ -189,9 +204,16 @@ arg_parse(int argc, char * const * argv, const struct cmd *f)
 	lopts = malloc((n + 2) * sizeof(struct option));
 	if (lopts == NULL)
 		err(1, "option memory");
+#ifndef __rtems__
 	p = shortopts = malloc((n + 3) * sizeof(char));
+#else /* __rtems__ */
+	p = shortopts = malloc((2 * n + 3) * sizeof(char));
+#endif /* __rtems__ */
 	if (shortopts == NULL)
 		err(1, "shortopts memory");
+#ifdef __rtems__
+	*p++ = '+';
+#endif /* __rtems__ */
 	idx = 0;
 	for (i = 0; i < n; i++) {
 		lopts[i].name = opts[i].long_arg;
@@ -282,6 +304,7 @@ bad_arg:
 	exit(1);
 }
 
+#ifndef __rtems__
 /*
  * Loads all the .so's from the specified directory.
  */
@@ -313,6 +336,7 @@ cmd_load_dir(const char *dir __unused, cmd_load_cb_t cb __unused, void *argp __u
 	}
 	closedir(d);
 }
+#endif /* __rtems__ */
 
 void
 cmd_register(struct cmd *up, struct cmd *cmd)

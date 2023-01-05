@@ -13,8 +13,10 @@
 /* Define to 1 if you have the `bpf_dump' function. */
 #define HAVE_BPF_DUMP 1
 
+#ifndef __rtems__
 /* capsicum support available */
 #define HAVE_CAPSICUM 1
+#endif /* __rtems__ */
 
 /* Casper library support available */
 /* See Makefile */

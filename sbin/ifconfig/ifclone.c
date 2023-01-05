@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -34,6 +38,9 @@ static const char rcsid[] =
   "$FreeBSD$";
 #endif /* not lint */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/queue.h>
@@ -47,6 +54,9 @@ static const char rcsid[] =
 #include <unistd.h>
 
 #include "ifconfig.h"
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-ifclone-data.h"
+#endif /* __rtems__ */
 
 static void
 list_cloners(void)
@@ -98,7 +108,11 @@ struct clone_defcb {
 	SLIST_ENTRY(clone_defcb) next;
 };
 
+#ifndef __rtems__
 static SLIST_HEAD(, clone_defcb) clone_defcbh =
+#else /* __rtems__ */
+static SLIST_HEAD(clone_defcb_list, clone_defcb) clone_defcbh =
+#endif /* __rtems__ */
    SLIST_HEAD_INITIALIZER(clone_defcbh);
 
 void
@@ -107,6 +121,11 @@ clone_setdefcallback(const char *ifprefix, clone_callback_func *p)
 	struct clone_defcb *dcp;
 
 	dcp = malloc(sizeof(*dcp));
+#ifndef __rtems__
+	if (dcp == NULL) {
+		errx(1, "unable to allocate clone");
+	}
+#endif /* __rtems__ */
 	strlcpy(dcp->ifprefix, ifprefix, IFNAMSIZ-1);
 	dcp->clone_cb = p;
 	SLIST_INSERT_HEAD(&clone_defcbh, dcp, next);
@@ -185,7 +204,11 @@ clone_Copt_cb(const char *optarg __unused)
 }
 static struct option clone_Copt = { .opt = "C", .opt_usage = "[-C]", .cb = clone_Copt_cb };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+void
+#endif /* __rtems__ */
 clone_ctor(void)
 {
 	size_t i;

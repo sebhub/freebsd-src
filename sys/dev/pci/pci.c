@@ -78,6 +78,14 @@ __FBSDID("$FreeBSD$");
 #include "pcib_if.h"
 #include "pci_if.h"
 
+#ifdef __rtems__
+#undef bus_read_4
+#define bus_read_4(r, o)						\
+    le32toh(bus_space_read_4((r)->r_bustag, (r)->r_bushandle, o))
+#undef bus_write_4
+#define bus_write_4(r, o, v)					\
+    bus_space_write_4((r)->r_bustag, (r)->r_bushandle, o, htole32(v))
+#endif /* __rtems__ */
 #define	PCIR_IS_BIOS(cfg, reg)						\
 	(((cfg)->hdrtype == PCIM_HDRTYPE_NORMAL && reg == PCIR_BIOS) ||	\
 	 ((cfg)->hdrtype == PCIM_HDRTYPE_BRIDGE && reg == PCIR_BIOS_1))
@@ -121,8 +129,10 @@ static void		pci_resume_msi(device_t dev);
 static void		pci_resume_msix(device_t dev);
 static int		pci_remap_intr_method(device_t bus, device_t dev,
 			    u_int irq);
+#ifndef __rtems__
 static void		pci_hint_device_unit(device_t acdev, device_t child,
 			    const char *name, int *unitp);
+#endif /* __rtems__ */
 static int		pci_reset_post(device_t dev, device_t child);
 static int		pci_reset_prepare(device_t dev, device_t child);
 static int		pci_reset_child(device_t dev, device_t child,
@@ -169,7 +179,9 @@ static device_method_t pci_methods[] = {
 	DEVMETHOD(bus_child_detached,	pci_child_detached),
 	DEVMETHOD(bus_child_pnpinfo_str, pci_child_pnpinfo_str_method),
 	DEVMETHOD(bus_child_location_str, pci_child_location_str_method),
+#ifndef __rtems__
 	DEVMETHOD(bus_hint_device_unit,	pci_hint_device_unit),
+#endif /* __rtems__ */
 	DEVMETHOD(bus_remap_intr,	pci_remap_intr_method),
 	DEVMETHOD(bus_suspend_child,	pci_suspend_child),
 	DEVMETHOD(bus_resume_child,	pci_resume_child),
@@ -456,6 +468,7 @@ pci_find_dbsf(uint32_t domain, uint8_t bus, uint8_t slot, uint8_t func)
 	return (NULL);
 }
 
+#ifndef __rtems__
 /* Find a device_t by vendor/device ID */
 
 device_t
@@ -472,6 +485,7 @@ pci_find_device(uint16_t vendor, uint16_t device)
 
 	return (NULL);
 }
+#endif /* __rtems__ */
 
 device_t
 pci_find_class(uint8_t class, uint8_t subclass)
@@ -3403,7 +3417,9 @@ pci_assign_interrupt(device_t bus, device_t dev, int force_route)
 {
 	struct pci_devinfo *dinfo = device_get_ivars(dev);
 	pcicfgregs *cfg = &dinfo->cfg;
+#ifndef __rtems__
 	char tunable_name[64];
+#endif /* __rtems__ */
 	int irq;
 
 	/* Has to have an intpin to have an interrupt. */
@@ -3412,11 +3428,13 @@ pci_assign_interrupt(device_t bus, device_t dev, int force_route)
 
 	/* Let the user override the IRQ with a tunable. */
 	irq = PCI_INVALID_IRQ;
+#ifndef __rtems__
 	snprintf(tunable_name, sizeof(tunable_name),
 	    "hw.pci%d.%d.%d.INT%c.irq",
 	    cfg->domain, cfg->bus, cfg->slot, cfg->intpin + 'A' - 1);
 	if (TUNABLE_INT_FETCH(tunable_name, &irq) && (irq >= 255 || irq <= 0))
 		irq = PCI_INVALID_IRQ;
+#endif /* __rtems__ */
 
 	/*
 	 * If we didn't get an IRQ via the tunable, then we either use the
@@ -3483,6 +3501,7 @@ ohci_early_takeover(device_t self)
 	bus_release_resource(self, SYS_RES_MEMORY, rid, res);
 }
 
+#ifndef __rtems__
 /* Perform early UHCI takeover from SMM. */
 static void
 uhci_early_takeover(device_t self)
@@ -3506,6 +3525,7 @@ uhci_early_takeover(device_t self)
 		bus_release_resource(self, SYS_RES_IOPORT, rid, res);
 	}
 }
+#endif /* __rtems__ */
 
 /* Perform early EHCI takeover from SMM. */
 static void
@@ -4034,8 +4054,10 @@ pci_add_resources(device_t bus, device_t dev, int force, uint32_t prefetchmask)
 			ehci_early_takeover(dev);
 		else if (pci_get_progif(dev) == PCIP_SERIALBUS_USB_OHCI)
 			ohci_early_takeover(dev);
+#ifndef __rtems__
 		else if (pci_get_progif(dev) == PCIP_SERIALBUS_USB_UHCI)
 			uhci_early_takeover(dev);
+#endif /* __rtems__ */
 	}
 
 #if defined(NEW_PCIB) && defined(PCI_RES_BUS)
@@ -4428,6 +4450,7 @@ pci_detach(device_t dev)
 	return (device_delete_children(dev));
 }
 
+#ifndef __rtems__
 static void
 pci_hint_device_unit(device_t dev, device_t child, const char *name, int *unitp)
 {
@@ -4452,6 +4475,7 @@ pci_hint_device_unit(device_t dev, device_t child, const char *name, int *unitp)
 		return;
 	}
 }
+#endif /* __rtems__ */
 
 static void
 pci_set_power_child(device_t dev, device_t child, int state)
@@ -4583,6 +4607,7 @@ pci_resume(device_t dev)
 static void
 pci_load_vendor_data(void)
 {
+#ifndef __rtems__
 	caddr_t data;
 	void *ptr;
 	size_t sz;
@@ -4598,6 +4623,7 @@ pci_load_vendor_data(void)
 			pci_vendordata[pci_vendordata_size] = '\n';
 		}
 	}
+#endif /* __rtems__ */
 }
 
 void
@@ -5386,6 +5412,15 @@ pci_reserve_map(device_t dev, device_t child, int type, int *rid,
 	 * Allocate enough resource, and then write back the
 	 * appropriate BAR for that resource.
 	 */
+#if defined(__rtems__) && defined(__i386__)
+	/*
+	 * FIXME: This is a quick and dirty hack.  Use the BIOS or whoever
+	 * provided values.  The nexus device reserves such allocation requests
+	 * offhandedly.
+	 */
+	start = map;
+	end = map + count;
+#endif /* __rtems__ */
 	resource_list_add(rl, type, *rid, start, end, count);
 	res = resource_list_reserve(rl, dev, child, type, rid, start, end,
 	    count, flags & ~RF_ACTIVE);

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1990, 1991, 1993, 1994, 1995, 1996, 1997
  *     John Robert LoVerso. All rights reserved.
@@ -1937,3 +1941,6 @@ snmp_print(netdissect_options *ndo,
 		ND_PRINT((ndo, "} "));
 	}
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-snmp-data.h"
+#endif /* __rtems__ */

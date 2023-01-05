@@ -847,6 +847,7 @@ pci_conf_for_copyout(const struct pci_conf *pcp, union pci_conf_union *pcup,
 	}
 }
 
+#ifndef __rtems__
 static int
 pci_bar_mmap(device_t pcidev, struct pci_bar_mmap *pbm)
 {
@@ -919,6 +920,7 @@ out:
 	sglist_free(sg);
 	return (error);
 }
+#endif /* __rtems__ */
 
 static int
 pci_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag, struct thread *td)
@@ -933,7 +935,9 @@ pci_ioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag, struct thread *t
 	struct pci_list_vpd_io *lvio;
 	struct pci_match_conf *pattern_buf;
 	struct pci_map *pm;
+#ifndef __rtems__
 	struct pci_bar_mmap *pbm;
+#endif /* __rtems__ */
 	size_t confsz, iolen;
 	int error, ionum, i, num_patterns;
 	union pci_conf_union pcu;
@@ -1285,6 +1289,7 @@ getconfexit:
 		error = pci_list_vpd(pcidev, lvio);
 		break;
 
+#ifndef __rtems__
 	case PCIOCBARMMAP:
 		pbm = (struct pci_bar_mmap *)data;
 		if ((flag & FWRITE) == 0 &&
@@ -1295,6 +1300,7 @@ getconfexit:
 		    pbm->pbm_sel.pc_func);
 		error = pcidev == NULL ? ENODEV : pci_bar_mmap(pcidev, pbm);
 		break;
+#endif /* __rtems__ */
 
 	default:
 		error = ENOTTY;

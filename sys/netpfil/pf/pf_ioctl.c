@@ -1576,8 +1576,13 @@ pfioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flags, struct thread *td
 		rule->states_cur = counter_u64_alloc(M_WAITOK);
 		rule->states_tot = counter_u64_alloc(M_WAITOK);
 		rule->src_nodes = counter_u64_alloc(M_WAITOK);
+#ifndef __rtems__
 		rule->cuid = td->td_ucred->cr_ruid;
 		rule->cpid = td->td_proc ? td->td_proc->p_pid : 0;
+#else /* __rtems__ */
+		rule->cuid = BSD_DEFAULT_UID;
+		rule->cpid = BSD_DEFAULT_PID;
+#endif /* __rtems__ */
 		TAILQ_INIT(&rule->rpool.list);
 
 #define	ERROUT(x)	{ error = (x); goto DIOCADDRULE_error; }
@@ -1837,8 +1842,13 @@ DIOCADDRULE_error:
 			newrule->states_cur = counter_u64_alloc(M_WAITOK);
 			newrule->states_tot = counter_u64_alloc(M_WAITOK);
 			newrule->src_nodes = counter_u64_alloc(M_WAITOK);
+#ifndef __rtems__
 			newrule->cuid = td->td_ucred->cr_ruid;
 			newrule->cpid = td->td_proc ? td->td_proc->p_pid : 0;
+#else /* __rtems__ */
+			newrule->cuid = BSD_DEFAULT_UID;
+			newrule->cpid = BSD_DEFAULT_PID;
+#endif /* __rtems__ */
 			TAILQ_INIT(&newrule->rpool.list);
 		}
 
@@ -4349,6 +4359,7 @@ pf_load(void)
 	return (0);
 }
 
+#ifndef __rtems__
 static void
 pf_unload_vnet(void)
 {
@@ -4405,6 +4416,7 @@ pf_unload_vnet(void)
 	for (int i = 0; i < SCNT_MAX; i++)
 		counter_u64_free(V_pf_status.scounters[i]);
 }
+#endif /* __rtems__ */
 
 static void
 pf_unload(void)
@@ -4437,6 +4449,7 @@ vnet_pf_init(void *unused __unused)
 VNET_SYSINIT(vnet_pf_init, SI_SUB_PROTO_FIREWALL, SI_ORDER_THIRD, 
     vnet_pf_init, NULL);
 
+#ifndef __rtems__
 static void
 vnet_pf_uninit(const void *unused __unused)
 {
@@ -4446,6 +4459,7 @@ vnet_pf_uninit(const void *unused __unused)
 SYSUNINIT(pf_unload, SI_SUB_PROTO_FIREWALL, SI_ORDER_SECOND, pf_unload, NULL);
 VNET_SYSUNINIT(vnet_pf_uninit, SI_SUB_PROTO_FIREWALL, SI_ORDER_THIRD,
     vnet_pf_uninit, NULL);
+#endif /* __rtems__ */
 
 
 static int

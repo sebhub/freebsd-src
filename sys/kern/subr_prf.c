@@ -52,15 +52,21 @@ __FBSDID("$FreeBSD$");
 #include <sys/mutex.h>
 #include <sys/sx.h>
 #include <sys/kernel.h>
+#ifndef __rtems__
 #include <sys/msgbuf.h>
+#endif /* __rtems__ */
 #include <sys/malloc.h>
 #include <sys/priv.h>
 #include <sys/proc.h>
 #include <sys/stddef.h>
 #include <sys/sysctl.h>
+#ifndef __rtems__
 #include <sys/tty.h>
+#endif /* __rtems__ */
 #include <sys/syslog.h>
+#ifndef __rtems__
 #include <sys/cons.h>
+#endif /* __rtems__ */
 #include <sys/uio.h>
 #endif
 #include <sys/ctype.h>
@@ -90,13 +96,16 @@ __FBSDID("$FreeBSD$");
 
 #ifdef _KERNEL
 
+#ifndef __rtems__
 #define TOCONS	0x01
 #define TOTTY	0x02
 #define TOLOG	0x04
+#endif /* __rtems__ */
 
 /* Max number conversion buffer length: a u_quad_t in base 2, plus NUL byte. */
 #define MAXNBUF	(sizeof(intmax_t) * NBBY + 1)
 
+#ifndef __rtems__
 struct putchar_arg {
 	int	flags;
 	int	pri;
@@ -106,20 +115,24 @@ struct putchar_arg {
 	char	*p_next;
 	size_t	remain;
 };
+#endif /* __rtems__ */
 
 struct snprintf_arg {
 	char	*str;
 	size_t	remain;
 };
 
+#ifndef __rtems__
 extern	int log_open;
 
 static void  msglogchar(int c, int pri);
 static void  msglogstr(char *str, int pri, int filter_cr);
 static void  putchar(int ch, void *arg);
+#endif /* __rtems__ */
 static char *ksprintn(char *nbuf, uintmax_t num, int base, int *len, int upper);
 static void  snprintf_func(int ch, void *arg);
 
+#ifndef __rtems__
 static bool msgbufmapped;		/* Set when safe to use msgbuf */
 int msgbuftrigger;
 struct msgbuf *msgbufp;
@@ -203,6 +216,7 @@ uprintf(const char *fmt, ...)
 	va_end(ap);
 	return (retval);
 }
+#endif /* __rtems__ */
 
 /*
  * tprintf and vtprintf print on the controlling terminal associated with the
@@ -221,6 +235,7 @@ tprintf(struct proc *p, int pri, const char *fmt, ...)
 void
 vtprintf(struct proc *p, int pri, const char *fmt, va_list ap)
 {
+#ifndef __rtems__
 	struct tty *tp = NULL;
 	int flags = 0;
 	struct putchar_arg pca;
@@ -256,8 +271,12 @@ vtprintf(struct proc *p, int pri, const char *fmt, va_list ap)
 	if (sess != NULL)
 		sess_release(sess);
 	msgbuftrigger = 1;
+#else /* __rtems__ */
+	vprintf(fmt, ap);
+#endif /* __rtems__ */
 }
 
+#ifndef __rtems__
 /*
  * Ttyprintf displays a message on a tty; it should be used only by
  * the tty driver, or anything that knows the underlying tty will not
@@ -319,6 +338,10 @@ _vprintf(int level, int flags, const char *fmt, va_list ap)
 	TSEXIT();
 	return (retval);
 }
+#else /* __rtems__ */
+#include <rtems/bsd/bsd.h>
+#define	_vprintf(level, flags, fmt, ap) rtems_bsd_vprintf(level, fmt, ap)
+#endif /* __rtems__ */
 
 /*
  * Log writes to the log buffer, and guarantees not to sleep (so can be
@@ -340,9 +363,12 @@ vlog(int level, const char *fmt, va_list ap)
 {
 
 	(void)_vprintf(level, log_open ? TOLOG : TOCONS | TOLOG, fmt, ap);
+#ifndef __rtems__
 	msgbuftrigger = 1;
+#endif /* __rtems__ */
 }
 
+#ifndef __rtems__
 #define CONSCHUNK 128
 
 void
@@ -407,6 +433,7 @@ log_console(struct uio *uio)
 	free(uio, M_IOV);
 	free(consbuffer, M_TEMP);
 }
+#endif /* __rtems__ */
 
 int
 printf(const char *fmt, ...)
@@ -428,12 +455,15 @@ vprintf(const char *fmt, va_list ap)
 
 	retval = _vprintf(-1, TOCONS | TOLOG, fmt, ap);
 
+#ifndef __rtems__
 	if (!panicstr)
 		msgbuftrigger = 1;
+#endif /* __rtems__ */
 
 	return (retval);
 }
 
+#ifndef __rtems__
 static void
 prf_putbuf(char *bufr, int flags, int pri)
 {
@@ -517,6 +547,7 @@ putchar(int c, void *arg)
 	if ((flags & (TOCONS | TOLOG)) && c != '\0')
 		putbuf(c, ap);
 }
+#endif /* __rtems__ */
 
 /*
  * Scaled down version of sprintf(3).
@@ -809,6 +840,11 @@ reswitch:	switch (ch = (u_char)*fmt++) {
 			else
 				*(va_arg(ap, int *)) = retval;
 			break;
+#ifdef __rtems__
+		case 'm':
+			p = strerror(errno);
+			goto handle_string;
+#endif /* __rtems__ */
 		case 'o':
 			base = 8;
 			goto handle_nosign;
@@ -828,6 +864,9 @@ reswitch:	switch (ch = (u_char)*fmt++) {
 			goto handle_nosign;
 		case 's':
 			p = va_arg(ap, char *);
+#ifdef __rtems__
+handle_string:
+#endif /* __rtems__ */
 			if (p == NULL)
 				p = "(null)";
 			if (!dot)
@@ -985,6 +1024,7 @@ number:
 #undef PCHAR
 }
 
+#ifndef __rtems__
 /*
  * Put character in log buffer with a particular priority.
  */
@@ -1182,6 +1222,7 @@ hexdump(const void *ptr, int length, const char *hdr, int flags)
 		printf("\n");
 	}
 }
+#endif /* __rtems__ */
 #endif /* _KERNEL */
 
 void
@@ -1238,6 +1279,7 @@ sbuf_hexdump(struct sbuf *sb, const void *ptr, int length, const char *hdr,
 	}
 }
 
+#ifndef __rtems__
 #ifdef _KERNEL
 void
 counted_warning(unsigned *counter, const char *msg)
@@ -1275,3 +1317,11 @@ sbuf_putbuf(struct sbuf *sb)
 	printf("%s", sbuf_data(sb));
 }
 #endif
+#else /* __rtems__ */
+void
+sbuf_putbuf(struct sbuf *sb)
+{
+
+	printf("%s", sbuf_data(sb));
+}
+#endif /* __rtems__ */

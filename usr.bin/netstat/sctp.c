@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-netstat-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -37,6 +41,9 @@ static char sccsid[] = "@(#)sctp.c	0.1 (Berkeley) 4/18/2007";
 #endif /* not lint */
 #endif
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -65,6 +72,9 @@ __FBSDID("$FreeBSD$");
 #include <unistd.h>
 #include "netstat.h"
 #include <libxo/xo.h>
+#ifdef __rtems__
+#include "rtems-bsd-netstat-sctp-data.h"
+#endif /* __rtems__ */
 
 #ifdef SCTP
 

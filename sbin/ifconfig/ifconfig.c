@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -43,6 +47,15 @@ static const char rcsid[] =
   "$FreeBSD$";
 #endif /* not lint */
 
+#ifdef __rtems__
+#define __need_getopt_newlib
+#define option getopt_option
+#include <getopt.h>
+#undef option
+#include <machine/rtems-bsd-program.h>
+#include <machine/rtems-bsd-commands.h>
+#include <rtems/bsd/modules.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/module.h>
@@ -78,6 +91,9 @@ static const char rcsid[] =
 #include <unistd.h>
 
 #include "ifconfig.h"
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-ifconfig-data.h"
+#endif /* __rtems__ */
 
 /*
  * Since "struct ifreq" is composed of various union members, callers
@@ -131,6 +147,7 @@ struct ifa_order_elt {
 
 TAILQ_HEAD(ifa_queue, ifa_order_elt);
 
+#ifndef __rtems__
 static struct module_map_entry {
 	const char *ifname;
 	const char *kldname;
@@ -162,6 +179,7 @@ static struct module_map_entry {
 		.kldname = "if_enc",
 	},
 };
+#endif /* __rtems__ */
 
 
 void
@@ -390,6 +408,56 @@ void printifnamemaybe()
 		printf("%s\n", name);
 }
 
+#ifdef __rtems__
+static void ifconfig_ctor(void);
+static int main(int argc, char *argv[]);
+
+static int
+mainwrapper(int argc, char *argv[])
+{
+	ifconfig_ctor();
+	bridge_ctor();
+	clone_ctor();
+	gif_ctor();
+	gre_ctor();
+	group_ctor();
+	ifmedia_ctor();
+#ifdef RTEMS_BSD_MODULE_NET80211
+	ieee80211_ctor();
+#endif
+#ifdef RTEMS_BSD_MODULE_NETINET6
+	inet6_ctor();
+#endif
+	inet_ctor();
+	lagg_ctor();
+	link_ctor();
+	mac_ctor();
+	pfsync_ctor();
+	vlan_ctor();
+
+	return main(argc, argv);
+}
+
+RTEMS_LINKER_RWSET(bsd_prog_ifconfig, char);
+
+int
+rtems_bsd_command_ifconfig(int argc, char *argv[])
+{
+	int exit_code;
+	void *data_begin;
+	size_t data_size;
+
+	data_begin = RTEMS_LINKER_SET_BEGIN(bsd_prog_ifconfig);
+	data_size = RTEMS_LINKER_SET_SIZE(bsd_prog_ifconfig);
+
+	rtems_bsd_program_lock();
+	exit_code = rtems_bsd_program_call_main_with_data_restore("ifconfig",
+	    mainwrapper, argc, argv, data_begin, data_size);
+	rtems_bsd_program_unlock();
+
+	return exit_code;
+}
+#endif /* __rtems__ */
 int
 main(int argc, char *argv[])
 {
@@ -406,6 +474,15 @@ main(int argc, char *argv[])
 	struct option *p;
 	size_t iflen;
 	int flags;
+#ifdef __rtems__
+	struct getopt_data getopt_data;
+	memset(&getopt_data, 0, sizeof(getopt_data));
+#define optind getopt_data.optind
+#define optarg getopt_data.optarg
+#define opterr getopt_data.opterr
+#define optopt getopt_data.optopt
+#define getopt(argc, argv, opt) getopt_r(argc, argv, opt, &getopt_data)
+#endif /* __rtems__ */
 
 	all = downonly = uponly = namesonly = noload = verbose = 0;
 	f_inet = f_inet6 = f_ether = f_addr = NULL;
@@ -421,7 +498,11 @@ main(int argc, char *argv[])
 	atexit(printifnamemaybe);
 
 	/* Parse leading line options */
+#ifndef __rtems__
 	strlcpy(options, "f:adklmnuv", sizeof(options));
+#else /* __rtems__ */
+	strlcpy(options, "+f:adklmnuv", sizeof(options));
+#endif /* __rtems__ */
 	for (p = opts; p != NULL; p = p->next)
 		strlcat(options, p->opt, sizeof(options));
 	while ((c = getopt(argc, argv, options)) != -1) {
@@ -1273,7 +1354,11 @@ status(const struct afswtch *afp, const struct sockaddr_dl *sdl,
 
 	if (afp == NULL) {
 		allfamilies = 1;
+#ifndef __rtems__
 		ifr.ifr_addr.sa_family = AF_LOCAL;
+#else /* __rtems__ */
+		ifr.ifr_addr.sa_family = AF_INET;
+#endif /* __rtems__ */
 	} else {
 		allfamilies = 0;
 		ifr.ifr_addr.sa_family =
@@ -1445,6 +1530,7 @@ print_vhid(const struct ifaddrs *ifa, const char *s)
 void
 ifmaybeload(const char *name)
 {
+#ifndef __rtems__
 #define MOD_PREFIX_LEN		3	/* "if_" */
 	struct module_stat mstat;
 	int i, fileid, modid;
@@ -1514,6 +1600,7 @@ ifmaybeload(const char *name)
 	 * infer the names of all drivers (eg mlx4en(4)).
 	 */
 	(void) kldload(ifkind);
+#endif /* __rtems__ */
 }
 
 static struct cmd basic_cmds[] = {
@@ -1602,7 +1689,11 @@ static struct cmd basic_cmds[] = {
 	DEF_CMD_ARG("name",			setifname),
 };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+static void
+#endif /* __rtems__ */
 ifconfig_ctor(void)
 {
 	size_t i;

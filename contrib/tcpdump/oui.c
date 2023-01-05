@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that: (1) source code
@@ -102,3 +106,6 @@ const struct tok smi_values[] = {
     { SMI_WIFI_ALLIANCE,        "Wi-Fi Alliance"},
     { 0, NULL}
 };
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-oui-data.h"
+#endif /* __rtems__ */

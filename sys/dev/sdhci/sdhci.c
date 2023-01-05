@@ -1503,14 +1503,23 @@ sdhci_exec_tuning(struct sdhci_slot *slot, bool reset)
 	tune_cmd = slot->tune_cmd;
 	for (i = 0; i < MMC_TUNING_MAX; i++) {
 		memset(tune_req, 0, sizeof(*tune_req));
+#ifdef __rtems__
+		rtems_binary_semaphore_init(&tune_req->req_done,
+		    "sdhci_req_done");
+#endif /* __rtems__ */
 		tune_req->cmd = tune_cmd;
 		tune_req->done = sdhci_req_wakeup;
 		tune_req->done_data = slot;
 		slot->req = tune_req;
 		slot->flags = 0;
 		sdhci_start(slot);
+#ifndef __rtems__
 		while (!(tune_req->flags & MMC_REQ_DONE))
 			msleep(tune_req, &slot->mtx, 0, "sdhciet", 0);
+#else /* __rtems__ */
+		rtems_binary_semaphore_wait(&tune_req->req_done);
+		rtems_binary_semaphore_destroy(&tune_req->req_done);
+#endif /* __rtems__ */
 		if (!(tune_req->flags & MMC_TUNE_DONE))
 			break;
 		hostctrl2 = RD2(slot, SDHCI_HOST_CONTROL2);
@@ -1596,11 +1605,15 @@ sdhci_req_done(struct sdhci_slot *slot)
 static void
 sdhci_req_wakeup(struct mmc_request *req)
 {
+#ifndef __rtems__
 	struct sdhci_slot *slot;
 
 	slot = req->done_data;
 	req->flags |= MMC_REQ_DONE;
 	wakeup(req);
+#else /* __rtems__ */
+	rtems_binary_semaphore_post(&req->req_done);
+#endif /* __rtems__ */
 }
 
 static void

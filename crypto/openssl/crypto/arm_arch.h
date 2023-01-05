@@ -10,6 +10,7 @@
 #ifndef __ARM_ARCH_H__
 # define __ARM_ARCH_H__
 
+#if defined(__rtems__) && defined(__arm__)
 # if !defined(__ARM_ARCH__)
 #  if defined(__CC_ARM)
 #   define __ARM_ARCH__ __TARGET_ARCH_ARM
@@ -81,4 +82,5 @@ extern unsigned int OPENSSL_armcap_P;
 # define ARMV8_PMULL     (1<<5)
 # define ARMV8_SHA512    (1<<6)
 
+#endif /* __rtems__ */
 #endif

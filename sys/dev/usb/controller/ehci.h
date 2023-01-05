@@ -364,26 +364,52 @@ typedef struct ehci_softc {
 } ehci_softc_t;
 
 #define	EREAD1(sc, a)	bus_space_read_1((sc)->sc_io_tag, (sc)->sc_io_hdl, (a))
+#ifndef __rtems__
 #define	EREAD2(sc, a)	bus_space_read_2((sc)->sc_io_tag, (sc)->sc_io_hdl, (a))
 #define	EREAD4(sc, a)	bus_space_read_4((sc)->sc_io_tag, (sc)->sc_io_hdl, (a))
+#else /* __rtems__ */
+#define	EREAD2(sc, a)	le16toh(bus_space_read_2((sc)->sc_io_tag, (sc)->sc_io_hdl, (a)))
+#define	EREAD4(sc, a)	le32toh(bus_space_read_4((sc)->sc_io_tag, (sc)->sc_io_hdl, (a)))
+#endif /* __rtems__ */
 #define	EWRITE1(sc, a, x)						\
 	    bus_space_write_1((sc)->sc_io_tag, (sc)->sc_io_hdl, (a), (x))
+#ifndef __rtems__
 #define	EWRITE2(sc, a, x)						\
 	    bus_space_write_2((sc)->sc_io_tag, (sc)->sc_io_hdl, (a), (x))
 #define	EWRITE4(sc, a, x)						\
 	    bus_space_write_4((sc)->sc_io_tag, (sc)->sc_io_hdl, (a), (x))
+#else /* __rtems__ */
+#define	EWRITE2(sc, a, x)						\
+	    bus_space_write_2((sc)->sc_io_tag, (sc)->sc_io_hdl, (a), htole16(x))
+#define	EWRITE4(sc, a, x)						\
+	    bus_space_write_4((sc)->sc_io_tag, (sc)->sc_io_hdl, (a), htole32(x))
+#endif /* __rtems__ */
 #define	EOREAD1(sc, a)							\
 	    bus_space_read_1((sc)->sc_io_tag, (sc)->sc_io_hdl, (sc)->sc_offs+(a))
+#ifndef __rtems__
 #define	EOREAD2(sc, a)							\
 	    bus_space_read_2((sc)->sc_io_tag, (sc)->sc_io_hdl, (sc)->sc_offs+(a))
 #define	EOREAD4(sc, a)							\
 	    bus_space_read_4((sc)->sc_io_tag, (sc)->sc_io_hdl, (sc)->sc_offs+(a))
+#else /* __rtems__ */
+#define	EOREAD2(sc, a)							\
+	    le16toh(bus_space_read_2((sc)->sc_io_tag, (sc)->sc_io_hdl, (sc)->sc_offs+(a)))
+#define	EOREAD4(sc, a)							\
+	    le32toh(bus_space_read_4((sc)->sc_io_tag, (sc)->sc_io_hdl, (sc)->sc_offs+(a)))
+#endif /* __rtems__ */
 #define	EOWRITE1(sc, a, x)						\
 	    bus_space_write_1((sc)->sc_io_tag, (sc)->sc_io_hdl, (sc)->sc_offs+(a), (x))
+#ifndef __rtems__
 #define	EOWRITE2(sc, a, x)						\
 	    bus_space_write_2((sc)->sc_io_tag, (sc)->sc_io_hdl, (sc)->sc_offs+(a), (x))
 #define	EOWRITE4(sc, a, x)						\
 	    bus_space_write_4((sc)->sc_io_tag, (sc)->sc_io_hdl, (sc)->sc_offs+(a), (x))
+#else /* __rtems__ */
+#define	EOWRITE2(sc, a, x)						\
+	    bus_space_write_2((sc)->sc_io_tag, (sc)->sc_io_hdl, (sc)->sc_offs+(a), htole16(x))
+#define	EOWRITE4(sc, a, x)						\
+	    bus_space_write_4((sc)->sc_io_tag, (sc)->sc_io_hdl, (sc)->sc_offs+(a), htole32(x))
+#endif /* __rtems__ */
 
 #ifdef USB_EHCI_BIG_ENDIAN_DESC
 /*
@@ -449,6 +475,10 @@ usb_error_t ehci_reset(ehci_softc_t *sc);
 usb_error_t ehci_init(ehci_softc_t *sc);
 void	ehci_detach(struct ehci_softc *sc);
 void	ehci_interrupt(ehci_softc_t *sc);
+#ifdef __rtems__
+void	ehci_suspend(ehci_softc_t *sc);
+void	ehci_resume(ehci_softc_t *sc);
+#endif /* __rtems__ */
 uint16_t ehci_get_port_speed_portsc(struct ehci_softc *sc, uint16_t index);
 uint16_t ehci_get_port_speed_hostc(struct ehci_softc *sc, uint16_t index);
 

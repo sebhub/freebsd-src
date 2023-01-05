@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
  * All rights reserved.
@@ -650,7 +654,11 @@ union inaddr_u {
 	struct in_addr in4;
 	struct in6_addr in6;
 };
+#ifndef __rtems__
 static struct {
+#else /* __rtems__ */
+static struct cookiecache {
+#endif /* __rtems__ */
 	cookie_t initiator;
 	u_int version;
 	union inaddr_u iaddr;
@@ -1333,10 +1341,10 @@ ikev1_id_print(netdissect_options *ndo, u_char tpay _U_,
 #define USE_IPSECDOI_IN_PHASE1	1
 	const struct ikev1_pl_id *p;
 	struct ikev1_pl_id id;
-	static const char *idtypestr[] = {
+	static const char * const idtypestr[] = {
 		"IPv4", "IPv4net", "IPv6", "IPv6net",
 	};
-	static const char *ipsecidtypestr[] = {
+	static const char * const ipsecidtypestr[] = {
 		NULL, "IPv4", "FQDN", "user FQDN", "IPv4net", "IPv6",
 		"IPv6net", "IPv4range", "IPv6range", "ASN1 DN", "ASN1 GN",
 		"keyid",
@@ -1502,7 +1510,7 @@ ikev1_cert_print(netdissect_options *ndo, u_char tpay _U_,
 {
 	const struct ikev1_pl_cert *p;
 	struct ikev1_pl_cert cert;
-	static const char *certstr[] = {
+	static const char * const certstr[] = {
 		"none",	"pkcs7", "pgp", "dns",
 		"x509sign", "x509ke", "kerberos", "crl",
 		"arl", "spki", "x509attr",
@@ -1535,7 +1543,7 @@ ikev1_cr_print(netdissect_options *ndo, u_char tpay _U_,
 {
 	const struct ikev1_pl_cert *p;
 	struct ikev1_pl_cert cert;
-	static const char *certstr[] = {
+	static const char * const certstr[] = {
 		"none",	"pkcs7", "pgp", "dns",
 		"x509sign", "x509ke", "kerberos", "crl",
 		"arl", "spki", "x509attr",
@@ -1657,7 +1665,7 @@ ikev1_n_print(netdissect_options *ndo, u_char tpay _U_,
 	const u_char *ep2;
 	uint32_t doi;
 	uint32_t proto;
-	static const char *notify_error_str[] = {
+	static const char * const notify_error_str[] = {
 		NULL,				"INVALID-PAYLOAD-TYPE",
 		"DOI-NOT-SUPPORTED",		"SITUATION-NOT-SUPPORTED",
 		"INVALID-COOKIE",		"INVALID-MAJOR-VERSION",
@@ -1675,13 +1683,13 @@ ikev1_n_print(netdissect_options *ndo, u_char tpay _U_,
 		"CERTIFICATE-UNAVAILABLE",	"UNSUPPORTED-EXCHANGE-TYPE",
 		"UNEQUAL-PAYLOAD-LENGTHS",
 	};
-	static const char *ipsec_notify_error_str[] = {
+	static const char * const ipsec_notify_error_str[] = {
 		"RESERVED",
 	};
-	static const char *notify_status_str[] = {
+	static const char * const notify_status_str[] = {
 		"CONNECTED",
 	};
-	static const char *ipsec_notify_status_str[] = {
+	static const char * const ipsec_notify_status_str[] = {
 		"RESPONDER-LIFETIME",		"REPLAY-STATUS",
 		"INITIAL-CONTACT",
 	};
@@ -3144,3 +3152,6 @@ trunc:
  * c-basic-offset: 8
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-isakmp-data.h"
+#endif /* __rtems__ */

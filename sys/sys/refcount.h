@@ -53,7 +53,7 @@ refcount_acquire(volatile u_int *count)
 {
 
 	KASSERT(*count < UINT_MAX, ("refcount %p overflowed", count));
-	atomic_add_int(count, 1);
+	atomic_add_int((volatile int *)count, 1);
 }
 
 static __inline __result_use_check bool
@@ -76,7 +76,7 @@ refcount_release(volatile u_int *count)
 	u_int old;
 
 	atomic_thread_fence_rel();
-	old = atomic_fetchadd_int(count, -1);
+	old = atomic_fetchadd_int((volatile int *)count, -1);
 	KASSERT(old > 0, ("refcount %p is zero", count));
 	if (old > 1)
 		return (false);

@@ -68,13 +68,16 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/cpu.h>
 
+#ifndef __rtems__
 static void synch_setup(void *dummy);
 SYSINIT(synch_setup, SI_SUB_KICK_SCHEDULER, SI_ORDER_FIRST, synch_setup,
     NULL);
 
 int	hogticks;
+#endif /* __rtems__ */
 static uint8_t pause_wchan[MAXCPU];
 
+#ifndef __rtems__
 static struct callout loadav_callout;
 
 struct loadavg averunnable =
@@ -96,12 +99,15 @@ static void	loadav(void *arg);
 
 SDT_PROVIDER_DECLARE(sched);
 SDT_PROBE_DEFINE(sched, , , preempt);
+#endif /* __rtems__ */
 
 static void
 sleepinit(void *unused)
 {
 
+#ifndef __rtems__
 	hogticks = (hz / 10) * 2;	/* Default only. */
+#endif /* __rtems__ */
 	init_sleepqueues();
 }
 
@@ -133,7 +139,11 @@ _sleep(void *ident, struct lock_object *lock, int priority,
 	struct thread *td;
 	struct lock_class *class;
 	uintptr_t lock_state;
+#ifndef __rtems__
 	int catch, pri, rval, sleepq_flags;
+#else /* __rtems__ */
+	int pri, rval, sleepq_flags;
+#endif /* __rtems__ */
 	WITNESS_SAVE_DECL(lock_witness);
 
 	td = curthread;
@@ -146,8 +156,10 @@ _sleep(void *ident, struct lock_object *lock, int priority,
 	KASSERT(sbt != 0 || mtx_owned(&Giant) || lock != NULL,
 	    ("sleeping without a lock"));
 	KASSERT(ident != NULL, ("_sleep: NULL ident"));
+#ifndef __rtems__
 	KASSERT(TD_IS_RUNNING(td), ("_sleep: curthread not running"));
 	KASSERT(td->td_epochnest == 0, ("sleeping in an epoch section"));
+#endif /* __rtems__ */
 	if (priority & PDROP)
 		KASSERT(lock != NULL && lock != &Giant.lock_object,
 		    ("PDROP requires a non-Giant lock"));
@@ -156,23 +168,29 @@ _sleep(void *ident, struct lock_object *lock, int priority,
 	else
 		class = NULL;
 
+#ifndef __rtems__
 	if (SCHEDULER_STOPPED_TD(td)) {
 		if (lock != NULL && priority & PDROP)
 			class->lc_unlock(lock);
 		return (0);
 	}
 	catch = priority & PCATCH;
+#endif /* __rtems__ */
 	pri = priority & PRIMASK;
 
+#ifndef __rtems__
 	KASSERT(!TD_ON_SLEEPQ(td), ("recursive sleep"));
+#endif /* __rtems__ */
 
 	if ((uint8_t *)ident >= &pause_wchan[0] &&
 	    (uint8_t *)ident <= &pause_wchan[MAXCPU - 1])
 		sleepq_flags = SLEEPQ_PAUSE;
 	else
 		sleepq_flags = SLEEPQ_SLEEP;
+#ifndef __rtems__
 	if (catch)
 		sleepq_flags |= SLEEPQ_INTERRUPTIBLE;
+#endif /* __rtems__ */
 
 	sleepq_lock(ident);
 	CTR5(KTR_PROC, "sleep: thread %ld (pid %ld, %s) on %s (%p)",
@@ -207,12 +225,18 @@ _sleep(void *ident, struct lock_object *lock, int priority,
 		lock_state = class->lc_unlock(lock);
 		sleepq_lock(ident);
 	}
+#ifndef __rtems__
 	if (sbt != 0 && catch)
 		rval = sleepq_timedwait_sig(ident, pri);
 	else if (sbt != 0)
+#else /* __rtems__ */
+	if (sbt != 0)
+#endif /* __rtems__ */
 		rval = sleepq_timedwait(ident, pri);
+#ifndef __rtems__
 	else if (catch)
 		rval = sleepq_wait_sig(ident, pri);
+#endif /* __rtems__ */
 	else {
 		sleepq_wait(ident, pri);
 		rval = 0;
@@ -229,6 +253,7 @@ _sleep(void *ident, struct lock_object *lock, int priority,
 	return (rval);
 }
 
+#ifndef __rtems__
 int
 msleep_spin_sbt(void *ident, struct mtx *mtx, const char *wmesg,
     sbintime_t sbt, sbintime_t pr, int flags)
@@ -296,6 +321,7 @@ msleep_spin_sbt(void *ident, struct mtx *mtx, const char *wmesg,
 	WITNESS_RESTORE(&mtx->lock_object, mtx);
 	return (rval);
 }
+#endif /* __rtems__ */
 
 /*
  * pause_sbt() delays the calling thread by the given signed binary
@@ -313,6 +339,7 @@ pause_sbt(const char *wmesg, sbintime_t sbt, sbintime_t pr, int flags)
 	if (sbt == 0)
 		sbt = tick_sbt;
 
+#ifndef __rtems__
 	if ((cold && curthread == &thread0) || kdb_active ||
 	    SCHEDULER_STOPPED()) {
 		/*
@@ -331,6 +358,9 @@ pause_sbt(const char *wmesg, sbintime_t sbt, sbintime_t pr, int flags)
 	}
 	return (_sleep(&pause_wchan[curcpu], NULL,
 	    (flags & C_CATCH) ? PCATCH : 0, wmesg, sbt, pr, flags));
+#else /* __rtems__ */
+	return (_sleep(&pause_wchan[curcpu], NULL, 0, wmesg, sbt, pr, flags));
+#endif /* __rtems__ */
 }
 
 /*
@@ -345,8 +375,10 @@ wakeup(void *ident)
 	wakeup_swapper = sleepq_broadcast(ident, SLEEPQ_SLEEP, 0, 0);
 	sleepq_release(ident);
 	if (wakeup_swapper) {
+#ifndef __rtems__
 		KASSERT(ident != &proc0,
 		    ("wakeup and wakeup_swapper and proc0"));
+#endif /* __rtems__ */
 		kick_proc0();
 	}
 }
@@ -370,6 +402,7 @@ wakeup_one(void *ident)
 
 void
 wakeup_any(void *ident)
+#ifndef __rtems__
 {
 	int wakeup_swapper;
 
@@ -380,7 +413,11 @@ wakeup_any(void *ident)
 	if (wakeup_swapper)
 		kick_proc0();
 }
+#else /* __rtems__ */
+RTEMS_ALIAS(_bsd_wakeup_one);
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 static void
 kdb_switch(void)
 {
@@ -586,3 +623,4 @@ sys_yield(struct thread *td, struct yield_args *uap)
 	td->td_retval[0] = 0;
 	return (0);
 }
+#endif /* __rtems__ */

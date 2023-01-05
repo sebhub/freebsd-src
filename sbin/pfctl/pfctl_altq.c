@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-namespace.h"
+#endif /* __rtems__ */
+
 /*	$OpenBSD: pfctl_altq.c,v 1.93 2007/10/15 02:16:35 deraadt Exp $	*/
 
 /*
@@ -18,10 +22,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
 #define PFIOC_USE_LATEST
+#define _WANT_FREEBSD_BITSET
 
 #include <sys/types.h>
 #include <sys/bitset.h>
@@ -52,6 +60,9 @@ __FBSDID("$FreeBSD$");
 
 #include "pfctl_parser.h"
 #include "pfctl.h"
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-pfctl_altq-data.h"
+#endif /* __rtems__ */
 
 #define is_sc_null(sc)	(((sc) == NULL) || ((sc)->m1 == 0 && (sc)->m2 == 0))
 
@@ -1230,12 +1241,18 @@ sc_x2y(struct service_curve *sc, double x)
 #define	R2S_BUFS	8
 #define	RATESTR_MAX	16
 
+#ifdef __rtems__
+static char	 r2sbuf[R2S_BUFS][RATESTR_MAX];  /* ring bufer */
+static int	 idx = 0;
+#endif /* __rtems__ */
 char *
 rate2str(double rate)
 {
 	char		*buf;
+#ifndef __rtems__
 	static char	 r2sbuf[R2S_BUFS][RATESTR_MAX];  /* ring bufer */
 	static int	 idx = 0;
+#endif /* __rtems__ */
 	int		 i;
 	static const char unit[] = " KMG";
 

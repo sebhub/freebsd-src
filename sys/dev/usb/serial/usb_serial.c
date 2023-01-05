@@ -82,7 +82,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/priv.h>
 #include <sys/cons.h>
 
+#ifndef __rtems__
 #include <dev/uart/uart_ppstypes.h>
+#endif /* __rtems__ */
 
 #include <dev/usb/usb.h>
 #include <dev/usb/usbdi.h>
@@ -99,6 +101,7 @@ __FBSDID("$FreeBSD$");
 
 static SYSCTL_NODE(_hw_usb, OID_AUTO, ucom, CTLFLAG_RW, 0, "USB ucom");
 
+#ifndef __rtems__
 static int ucom_pps_mode;
 
 SYSCTL_INT(_hw_usb_ucom, OID_AUTO, pps_mode, CTLFLAG_RWTUN,
@@ -110,6 +113,7 @@ static int ucom_device_mode_console = 1;
 SYSCTL_INT(_hw_usb_ucom, OID_AUTO, device_mode_console, CTLFLAG_RW,
     &ucom_device_mode_console, 0,
     "set to 1 to mark terminals as consoles when in device mode");
+#endif /* __rtems__ */
 
 #ifdef USB_DEBUG
 static int ucom_debug = 0;
@@ -203,6 +207,7 @@ ucom_init(void *arg)
 }
 SYSINIT(ucom_init, SI_SUB_KLD - 1, SI_ORDER_ANY, ucom_init, NULL);
 
+#ifndef __rtems__
 static void
 ucom_uninit(void *arg)
 {
@@ -218,6 +223,7 @@ ucom_uninit(void *arg)
 	mtx_destroy(&ucom_mtx);
 }
 SYSUNINIT(ucom_uninit, SI_SUB_KLD - 3, SI_ORDER_ANY, ucom_uninit, NULL);
+#endif /* __rtems__ */
 
 /*
  * Mark a unit number (the X in cuaUX) as in use.
@@ -444,10 +450,12 @@ ucom_attach_tty(struct ucom_super_softc *ssc, struct ucom_softc *sc)
 
 	sc->sc_tty = tp;
 
+#ifndef __rtems__
 	sc->sc_pps.ppscap = PPS_CAPTUREBOTH;
 	sc->sc_pps.driver_abi = PPS_ABI_VERSION;
 	sc->sc_pps.driver_mtx = sc->sc_mtx;
 	pps_init_abi(&sc->sc_pps);
+#endif /* __rtems__ */
 
 	DPRINTF("ttycreate: %s\n", buf);
 
@@ -474,6 +482,7 @@ ucom_attach_tty(struct ucom_super_softc *ssc, struct ucom_softc *sc)
 		UCOM_MTX_UNLOCK(ucom_cons_softc);
 	}
 
+#ifndef __rtems__
 	if ((ssc->sc_flag & UCOM_FLAG_DEVICE_MODE) != 0 &&
 	    ucom_device_mode_console > 0 &&
 	    ucom_cons_softc == NULL) {
@@ -491,6 +500,7 @@ ucom_attach_tty(struct ucom_super_softc *ssc, struct ucom_softc *sc)
 
 		cnadd(cp);
 	}
+#endif /* __rtems__ */
 
 	return (0);
 }
@@ -502,11 +512,13 @@ ucom_detach_tty(struct ucom_super_softc *ssc, struct ucom_softc *sc)
 
 	DPRINTF("sc = %p, tp = %p\n", sc, sc->sc_tty);
 
+#ifndef __rtems__
 	if (sc->sc_consdev != NULL) {
 		cnremove(sc->sc_consdev);
 		free(sc->sc_consdev, M_USBDEV);
 		sc->sc_consdev = NULL;
 	}
+#endif /* __rtems__ */
 
 	if (sc->sc_flag & UCOM_FLAG_CONSOLE) {
 		UCOM_MTX_LOCK(ucom_cons_softc);
@@ -936,8 +948,10 @@ ucom_ioctl(struct tty *tp, u_long cmd, caddr_t data, struct thread *td)
 		} else {
 			error = ENOIOCTL;
 		}
+#ifndef __rtems__
 		if (error == ENOIOCTL)
 			error = pps_ioctl(cmd, data, &sc->sc_pps);
+#endif /* __rtems__ */
 		break;
 	}
 	return (error);
@@ -1144,7 +1158,9 @@ ucom_cfg_status_change(struct usb_proc_msg *_task)
 	uint8_t new_lsr;
 	uint8_t msr_delta;
 	uint8_t lsr_delta;
+#ifndef __rtems__
 	uint8_t pps_signal;
+#endif /* __rtems__ */
 
 	tp = sc->sc_tty;
 
@@ -1173,6 +1189,7 @@ ucom_cfg_status_change(struct usb_proc_msg *_task)
 	sc->sc_msr = new_msr;
 	sc->sc_lsr = new_lsr;
 
+#ifndef __rtems__
 	/*
 	 * Time pulse counting support.
 	 */
@@ -1197,6 +1214,7 @@ ucom_cfg_status_change(struct usb_proc_msg *_task)
 		pps_event(&sc->sc_pps, onoff ? PPS_CAPTUREASSERT :
 		    PPS_CAPTURECLEAR);
 	}
+#endif /* __rtems__ */
 
 	if (msr_delta & SER_DCD) {
 

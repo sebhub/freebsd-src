@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-namespace.h"
+#endif /* __rtems__ */
+
 /*	$OpenBSD: pf_print_state.c,v 1.52 2008/08/12 16:40:18 david Exp $	*/
 
 /*-
@@ -35,6 +39,9 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/endian.h>
@@ -51,6 +58,9 @@ __FBSDID("$FreeBSD$");
 
 #include "pfctl_parser.h"
 #include "pfctl.h"
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-pf_print_state-data.h"
+#endif /* __rtems__ */
 
 void	print_name(struct pf_addr *, sa_family_t);
 

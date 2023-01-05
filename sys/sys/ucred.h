@@ -59,13 +59,17 @@ struct ucred {
 	gid_t	cr_svgid;		/* saved group id */
 	struct uidinfo	*cr_uidinfo;	/* per euid resource consumption */
 	struct uidinfo	*cr_ruidinfo;	/* per ruid resource consumption */
+#ifndef __rtems__
 	struct prison	*cr_prison;	/* jail(2) */
 	struct loginclass	*cr_loginclass; /* login class */
+#endif /* __rtems__ */
 	u_int		cr_flags;	/* credential flags */
 	void 		*cr_pspare2[2];	/* general use 2 */
 #define	cr_endcopy	cr_label
 	struct label	*cr_label;	/* MAC label */
+#ifndef __rtems__
 	struct auditinfo_addr	cr_audit;	/* Audit properties. */
+#endif /* __rtems__ */
 	gid_t	*cr_groups;		/* groups */
 	int	cr_agroups;		/* Available groups */
 	gid_t   cr_smallgroups[XU_NGROUPS];	/* storage for small groups */
@@ -108,12 +112,16 @@ void	crcopy(struct ucred *dest, struct ucred *src);
 struct ucred	*crcopysafe(struct proc *p, struct ucred *cr);
 struct ucred	*crdup(struct ucred *cr);
 void	crextend(struct ucred *cr, int n);
+#ifndef __rtems__
 void	proc_set_cred_init(struct proc *p, struct ucred *cr);
 struct ucred	*proc_set_cred(struct proc *p, struct ucred *cr);
+#endif /* __rtems__ */
 void	crfree(struct ucred *cr);
 struct ucred	*crget(void);
 struct ucred	*crhold(struct ucred *cr);
+#ifndef __rtems__
 void	cru2x(struct ucred *cr, struct xucred *xcr);
+#endif /* __rtems__ */
 void	crsetgroups(struct ucred *cr, int n, gid_t *groups);
 int	groupmember(gid_t gid, struct ucred *cred);
 #endif /* _KERNEL */

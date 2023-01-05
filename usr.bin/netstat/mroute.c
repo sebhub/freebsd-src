@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-netstat-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-4-Clause
  *
@@ -39,6 +43,9 @@
  *	@(#)mroute.c	8.2 (Berkeley) 4/28/95
  */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -75,6 +82,9 @@ __FBSDID("$FreeBSD$");
 #include <libxo/xo.h>
 #include "netstat.h"
 #include "nl_defs.h"
+#ifdef __rtems__
+#include "rtems-bsd-netstat-mroute-data.h"
+#endif /* __rtems__ */
 
 static void	print_bw_meter(struct bw_meter *, int *);
 static void	print_mfc(struct mfc *, int, int *);
@@ -362,6 +372,7 @@ mroutepr()
 
 		free(mfctable);
 	} else {
+#ifndef __rtems__
 		LIST_HEAD(, mfc) *mfchashtbl;
 		u_long i, mfctablesize;
 		struct mfc mfc;
@@ -392,6 +403,10 @@ mroutepr()
 			xo_close_list("multicast-forwarding-entry");
 
 		free(mfchashtbl);
+#else /* __rtems__ */
+		warnx("mroutepr: not implemented");
+		return;
+#endif /* __rtems__ */
 	}
 
 	if (!banner_printed)
@@ -411,8 +426,10 @@ mrt_stats()
 
 	if (fetch_stats("net.inet.ip.mrtstat", mstaddr, &mrtstat,
 	    sizeof(mrtstat), kread_counters) != 0) {
+#ifndef __rtems__
 		if ((live && errno == ENOENT) || (!live && mstaddr == 0))
 			fprintf(stderr, "No IPv4 MROUTING kernel support.\n");
+#endif /* __rtems__ */
 		return;
 	}
 

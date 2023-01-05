@@ -29,6 +29,21 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 %{
+#ifdef __rtems__
+#include <machine/rtems-bsd-user-space.h>
+#undef INET6
+#endif /* __rtems__ */
+
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-namespace.h"
+
+/* Provided by kernel-space modules */
+#define	pf_find_or_create_ruleset _bsd_pf_find_or_create_ruleset
+#define	pf_anchor_setup _bsd_pf_anchor_setup
+#define	pf_remove_if_empty_ruleset _bsd_pf_remove_if_empty_ruleset
+
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -72,6 +87,9 @@ __FBSDID("$FreeBSD$");
 
 #include "pfctl_parser.h"
 #include "pfctl.h"
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-parse-data.h"
+#endif /* __rtems__ */
 
 static struct pfctl	*pf = NULL;
 static int		 debug = 0;
@@ -4558,6 +4576,9 @@ unaryop		: '='		{ $$ = PF_OP_EQ; }
 		;
 
 %%
+#ifdef __rtems__
+RTEMS_LINKER_RWSET_CONTENT(bsd_prog_pfctl, static YYSTACKDATA yystack);
+#endif /* __rtems__ */
 
 int
 yyerror(const char *fmt, ...)

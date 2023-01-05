@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright: (c) 2000 United States Government as represented by the
  *	Secretary of the Navy. All rights reserved.
@@ -2895,3 +2899,6 @@ trunc:
 	ND_PRINT((ndo, " [|ack]"));
 }
 #undef TRUNCRET
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-rx-data.h"
+#endif /* __rtems__ */

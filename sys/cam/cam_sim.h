@@ -34,6 +34,11 @@
 #define _CAM_CAM_SIM_H 1
 
 #ifdef _KERNEL
+#ifdef __rtems__
+#include <sys/param.h>
+#include <sys/proc.h>
+#include <sys/condvar.h>
+#endif /* __rtems__ */
 
 /*
  * The sim driver creates a sim for each controller.  The sim device
@@ -76,7 +81,9 @@ static __inline u_int32_t    cam_sim_path(struct cam_sim *sim);
 static __inline const char * cam_sim_name(struct cam_sim *sim);
 static __inline void *	     cam_sim_softc(struct cam_sim *sim);
 static __inline u_int32_t    cam_sim_unit(struct cam_sim *sim);
+#ifndef __rtems__
 static __inline u_int32_t    cam_sim_bus(struct cam_sim *sim);
+#endif /* __rtems__ */
 
 
 
@@ -85,6 +92,32 @@ static __inline u_int32_t    cam_sim_bus(struct cam_sim *sim);
 #define spriv_ptr1 sim_priv.entries[1].ptr
 #define spriv_field0 sim_priv.entries[0].field
 #define spriv_field1 sim_priv.entries[1].field
+
+#ifdef __rtems__
+/**
+ * @brief SIM states.
+ *
+ * @dot
+ *   digraph bsd_sim_state {
+ *     BSD_SIM_INIT -> BSD_SIM_INIT_BUSY;
+ *     BSD_SIM_INIT -> BSD_SIM_IDLE;
+ *     BSD_SIM_INIT_BUSY -> BSD_SIM_INIT_READY;
+ *     BSD_SIM_BUSY -> BSD_SIM_IDLE;
+ *     BSD_SIM_INIT_READY -> BSD_SIM_INIT;
+ *     BSD_SIM_IDLE -> BSD_SIM_BUSY;
+ *     BSD_SIM_IDLE -> BSD_SIM_DELETED;
+ *   }
+ * @enddot
+ */
+enum bsd_sim_state {
+  BSD_SIM_INIT = 0,
+  BSD_SIM_INIT_BUSY,
+  BSD_SIM_INIT_READY,
+  BSD_SIM_IDLE,
+  BSD_SIM_BUSY,
+  BSD_SIM_DELETED
+};
+#endif /* __rtems__ */
 
 /*
  * The sim driver should not access anything directly from this
@@ -96,10 +129,18 @@ struct cam_sim {
 	const char		*sim_name;
 	void			*softc;
 	struct mtx		*mtx;
+#ifndef __rtems__
 	TAILQ_HEAD(, ccb_hdr)	sim_doneq;
 	TAILQ_ENTRY(cam_sim)	links;
 	u_int32_t		path_id;/* The Boot device may set this to 0? */
+#else /* __rtems__ */
+	char			*disk;
+	enum bsd_sim_state	state;
+	struct cv		state_changed;
+	union ccb		ccb;
+#endif /* __rtems__ */
 	u_int32_t		unit_number;
+#ifndef __rtems__
 	u_int32_t		bus_id;
 	int			max_tagged_dev_openings;
 	int			max_dev_openings;
@@ -109,6 +150,7 @@ struct cam_sim {
 	struct callout		callout;
 	struct cam_devq 	*devq;	/* Device Queue to use for this SIM */
 	int			refcount; /* References to the SIM. */
+#endif /* __rtems__ */
 };
 
 #define CAM_SIM_LOCK(sim)	mtx_lock((sim)->mtx)
@@ -117,7 +159,11 @@ struct cam_sim {
 static __inline u_int32_t
 cam_sim_path(struct cam_sim *sim)
 {
+#ifndef __rtems__
 	return (sim->path_id);
+#else /* __rtems__ */
+	return (0);
+#endif /* __rtems__ */
 }
 
 static __inline const char *
@@ -138,11 +184,13 @@ cam_sim_unit(struct cam_sim *sim)
 	return (sim->unit_number);
 }
 
+#ifndef __rtems__
 static __inline u_int32_t
 cam_sim_bus(struct cam_sim *sim)
 {
 	return (sim->bus_id);
 }
+#endif /* __rtems__ */
 
 #endif /* _KERNEL */
 #endif /* _CAM_CAM_SIM_H */

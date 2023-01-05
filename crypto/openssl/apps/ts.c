@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-openssl-namespace.h"
+#endif /* __rtems__ */
+
 /*
  * Copyright 2006-2018 The OpenSSL Project Authors. All Rights Reserved.
  *
@@ -984,3 +989,6 @@ static int verify_cb(int ok, X509_STORE_CTX *ctx)
     return ok;
 }
 #endif  /* ndef OPENSSL_NO_TS */
+#ifdef __rtems__
+#include "rtems-bsd-openssl-ts-data.h"
+#endif /* __rtems__ */

@@ -44,9 +44,12 @@
  */
 struct rwlock {
 	struct lock_object	lock_object;
+#ifndef __rtems__
 	volatile uintptr_t	rw_lock;
+#endif /* __rtems__ */
 };
 
+#ifndef __rtems__
 /*
  * Members of struct rwlock_padalign must mirror members of struct rwlock.
  * rwlock_padalign rwlocks can use the rwlock(9) API transparently without
@@ -60,5 +63,8 @@ struct rwlock_padalign {
 	struct lock_object	lock_object;
 	volatile uintptr_t	rw_lock;
 } __aligned(CACHE_LINE_SIZE);
+#else /* __rtems__ */
+#define	rwlock_padalign rwlock
+#endif /* __rtems__ */
 
 #endif /* !_SYS__RWLOCK_H_ */

@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 2003 Bruce M. Simpson <bms@spc.org>
  * All rights reserved.
@@ -537,3 +541,6 @@ aodv_print(netdissect_options *ndo,
 trunc:
 	ND_PRINT((ndo, " [|aodv]"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-aodv-data.h"
+#endif /* __rtems__ */

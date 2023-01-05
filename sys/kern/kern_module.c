@@ -48,9 +48,11 @@ static MALLOC_DEFINE(M_MODULE, "module", "module data structures");
 
 struct module {
 	TAILQ_ENTRY(module)	link;	/* chain together all modules */
+#ifndef __rtems__
 	TAILQ_ENTRY(module)	flink;	/* all modules in a file */
 	struct linker_file	*file;	/* file which contains this module */
 	int			refs;	/* reference count */
+#endif /* __rtems__ */
 	int 			id;	/* unique id number */
 	char 			*name;	/* module name */
 	modeventhand_t 		handler;	/* event handler */
@@ -63,7 +65,9 @@ struct module {
 static TAILQ_HEAD(modulelist, module) modules;
 struct sx modules_sx;
 static int nextid = 1;
+#ifndef __rtems__
 static void module_shutdown(void *, int);
+#endif /* __rtems__ */
 
 static int
 modevent_nop(module_t mod, int what, void *arg)
@@ -85,12 +89,15 @@ module_init(void *arg)
 
 	sx_init(&modules_sx, "module subsystem sx lock");
 	TAILQ_INIT(&modules);
+#ifndef __rtems__
 	EVENTHANDLER_REGISTER(shutdown_final, module_shutdown, NULL,
 	    SHUTDOWN_PRI_DEFAULT);
+#endif /* __rtems__ */
 }
 
 SYSINIT(module, SI_SUB_KLD, SI_ORDER_FIRST, module_init, NULL);
 
+#ifndef __rtems__
 static void
 module_shutdown(void *arg1, int arg2)
 {
@@ -105,6 +112,7 @@ module_shutdown(void *arg1, int arg2)
 	MOD_SUNLOCK;
 	mtx_unlock(&Giant);
 }
+#endif /* __rtems__ */
 
 void
 module_register_init(const void *arg)
@@ -130,6 +138,7 @@ module_register_init(const void *arg)
 		    " %d\n", data->name, (void *)data->evhand, data->priv,
 		    error); 
 	} else {
+#ifndef __rtems__
 		MOD_XLOCK;
 		if (mod->file) {
 			/*
@@ -144,6 +153,7 @@ module_register_init(const void *arg)
 			TAILQ_INSERT_HEAD(&mod->file->modules, mod, flink);
 		}
 		MOD_XUNLOCK;
+#endif /* __rtems__ */
 	}
 	mtx_unlock(&Giant);
 }
@@ -158,13 +168,17 @@ module_register(const moduledata_t *data, linker_file_t container)
 	newmod = module_lookupbyname(data->name);
 	if (newmod != NULL) {
 		MOD_XUNLOCK;
+#ifndef __rtems__
 		printf("%s: cannot register %s from %s; already loaded from %s\n",
 		    __func__, data->name, container->filename, newmod->file->filename);
+#endif /* __rtems__ */
 		return (EEXIST);
 	}
 	namelen = strlen(data->name) + 1;
 	newmod = malloc(sizeof(struct module) + namelen, M_MODULE, M_WAITOK);
+#ifndef __rtems__
 	newmod->refs = 1;
+#endif /* __rtems__ */
 	newmod->id = nextid++;
 	newmod->name = (char *)(newmod + 1);
 	strcpy(newmod->name, data->name);
@@ -174,12 +188,17 @@ module_register(const moduledata_t *data, linker_file_t container)
 	TAILQ_INSERT_TAIL(&modules, newmod, link);
 
 	if (container)
+#ifndef __rtems__
 		TAILQ_INSERT_TAIL(&container->modules, newmod, flink);
 	newmod->file = container;
+#else /* __rtems__ */
+		BSD_ASSERT(0);
+#endif /* __rtems__ */
 	MOD_XUNLOCK;
 	return (0);
 }
 
+#ifndef __rtems__
 void
 module_reference(module_t mod)
 {
@@ -189,6 +208,7 @@ module_reference(module_t mod)
 	MOD_DPF(REFS, ("module_reference: before, refs=%d\n", mod->refs));
 	mod->refs++;
 }
+#endif /* __rtems__ */
 
 void
 module_release(module_t mod)
@@ -196,6 +216,7 @@ module_release(module_t mod)
 
 	MOD_XLOCK_ASSERT;
 
+#ifndef __rtems__
 	if (mod->refs <= 0)
 		panic("module_release: bad reference count");
 
@@ -203,11 +224,16 @@ module_release(module_t mod)
 	
 	mod->refs--;
 	if (mod->refs == 0) {
+#endif /* __rtems__ */
 		TAILQ_REMOVE(&modules, mod, link);
+#ifndef __rtems__
 		if (mod->file)
 			TAILQ_REMOVE(&mod->file->modules, mod, flink);
+#endif /* __rtems__ */
 		free(mod, M_MODULE);
+#ifndef __rtems__
 	}
+#endif /* __rtems__ */
 }
 
 module_t
@@ -226,6 +252,7 @@ module_lookupbyname(const char *name)
 	return (NULL);
 }
 
+#ifndef __rtems__
 module_t
 module_lookupbyid(int modid)
 {
@@ -438,6 +465,7 @@ sys_modfind(struct thread *td, struct modfind_args *uap)
 	MOD_SUNLOCK;
 	return (error);
 }
+#endif /* __rtems__ */
 
 MODULE_VERSION(kernel, __FreeBSD_version);
 

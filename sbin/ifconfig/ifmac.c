@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -36,6 +40,9 @@
  * $FreeBSD$
  */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/mac.h>
@@ -50,6 +57,9 @@
 #include <string.h>
 
 #include "ifconfig.h"
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-ifmac-data.h"
+#endif /* __rtems__ */
 
 static void
 maclabel_status(int s)
@@ -110,7 +120,11 @@ static struct afswtch af_mac = {
 	.af_other_status = maclabel_status,
 };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+void
+#endif /* __rtems__ */
 mac_ctor(void)
 {
 	size_t i;

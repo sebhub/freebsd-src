@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Decode and print Zephyr packets.
  *
@@ -334,3 +338,6 @@ trunc:
     ND_PRINT((ndo, " [|zephyr] (%d)", length));
     return;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-zephyr-data.h"
+#endif /* __rtems__ */

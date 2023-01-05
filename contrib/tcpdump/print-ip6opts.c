@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (C) 1998 WIDE Project.
  * All rights reserved.
@@ -211,3 +215,6 @@ dstopt_print(netdissect_options *ndo, register const u_char *bp)
     ND_PRINT((ndo, "[|DSTOPT]"));
     return(-1);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-ip6opts-data.h"
+#endif /* __rtems__ */

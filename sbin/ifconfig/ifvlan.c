@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-namespace.h"
+#endif /* __rtems__ */
+
 /*-
  * SPDX-License-Identifier: BSD-4-Clause
  *
@@ -36,6 +40,9 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -58,6 +65,9 @@
 #include <errno.h>
 
 #include "ifconfig.h"
+#ifdef __rtems__
+#include "rtems-bsd-ifconfig-ifvlan-data.h"
+#endif /* __rtems__ */
 
 #ifndef lint
 static const char rcsid[] =
@@ -218,7 +228,11 @@ static struct afswtch af_vlan = {
 	.af_other_status = vlan_status,
 };
 
+#ifndef __rtems__
 static __constructor void
+#else /* __rtems__ */
+void
+#endif /* __rtems__ */
 vlan_ctor(void)
 {
 	size_t i;

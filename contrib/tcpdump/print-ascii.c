@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*	$NetBSD: print-ascii.c,v 1.1 1999/09/30 14:49:12 sjg Exp $ 	*/
 
 /*-
@@ -207,3 +211,6 @@ main(int argc, char *argv[])
 	exit(0);
 }
 #endif /* MAIN */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-ascii-data.h"
+#endif /* __rtems__ */

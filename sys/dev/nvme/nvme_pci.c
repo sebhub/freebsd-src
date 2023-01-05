@@ -282,7 +282,11 @@ nvme_ctrlr_setup_interrupts(struct nvme_controller *ctrlr)
 	if (per_cpu_io_queues == 0)
 		num_io_queues = 1;
 
+#ifndef __rtems__
 	min_cpus_per_ioq = smp_threads_per_core;
+#else /* __rtems__ */
+	min_cpus_per_ioq = 1;
+#endif /* __rtems__ */
 	TUNABLE_INT_FETCH("hw.nvme.min_cpus_per_ioq", &min_cpus_per_ioq);
 	if (min_cpus_per_ioq > 1) {
 		num_io_queues = min(num_io_queues,

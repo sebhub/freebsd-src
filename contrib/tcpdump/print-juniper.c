@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*     NetBSD: print-juniper.c,v 1.2 2007/07/24 11:53:45 drochner Exp        */
 
 /*
@@ -1511,3 +1515,6 @@ juniper_parse_header(netdissect_options *ndo,
  * c-basic-offset: 4
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-juniper-data.h"
+#endif /* __rtems__ */

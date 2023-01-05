@@ -102,8 +102,12 @@ static	pthread_rwlock_t	nss_lock = PTHREAD_RWLOCK_INITIALIZER;
 /*
  * Runtime determination of whether we are dynamically linked or not.
  */
+#ifndef __rtems__
 extern	int		_DYNAMIC __attribute__ ((weak));
 #define	is_dynamic()	(&_DYNAMIC != NULL)
+#else /* __rtems__ */
+#define	is_dynamic()	0
+#endif /* __rtems__ */
 
 /*
  * default sourcelist: `files'
@@ -121,9 +125,11 @@ static	ns_dbt			*_nsmap = NULL;
 static	unsigned int		 _nsmodsize;
 static	ns_mod			*_nsmod;
 
+#ifndef __rtems__
 /* Placeholder for builtin modules' dlopen `handle'. */
 static	int			 __nss_builtin_handle;
 static	void			*nss_builtin_handle = &__nss_builtin_handle;
+#endif /* __rtems__ */
 
 #ifdef NS_CACHING
 /*
@@ -181,11 +187,15 @@ static	int	 string_compare(const void *, const void *);
 static	int	 mtab_compare(const void *, const void *);
 static	int	 nss_configure(void);
 static	void	 ns_dbt_free(ns_dbt *);
+#ifndef __rtems__
 static	void	 ns_mod_free(ns_mod *);
+#endif /* __rtems__ */
 static	void	 ns_src_free(ns_src **, int);
+#ifndef __rtems__
 static	void	 nss_load_builtin_modules(void);
 static	void	 nss_load_module(const char *, nss_module_register_fn);
 static	void	 nss_atexit(void);
+#endif /* __rtems__ */
 /* nsparser */
 extern	FILE	*_nsyyin;
 
@@ -291,8 +301,12 @@ _nsdbtaddsrc(ns_dbt *dbt, const ns_src *src)
 	    sizeof(*src));
 	modp = vector_search(&src->name, _nsmod, _nsmodsize, sizeof(*_nsmod),
 	    string_compare);
+#ifndef __rtems__
 	if (modp == NULL)
 		nss_load_module(src->name, NULL);
+#else /* __rtems__ */
+	(void)modp;
+#endif /* __rtems__ */
 }
 
 
@@ -371,11 +385,13 @@ nss_configure(void)
 		goto fin;
 	VECTOR_FREE(_nsmap, &_nsmapsize, sizeof(*_nsmap),
 	    (vector_free_elem)ns_dbt_free);
+#ifndef __rtems__
 	VECTOR_FREE(_nsmod, &_nsmodsize, sizeof(*_nsmod),
 	    (vector_free_elem)ns_mod_free);
 	if (confmod == 0)
 		(void)atexit(nss_atexit);
 	nss_load_builtin_modules();
+#endif /* __rtems__ */
 	_nsyyparse();
 	(void)fclose(_nsyyin);
 	vector_sort(_nsmap, _nsmapsize, sizeof(*_nsmap), string_compare);
@@ -445,6 +461,7 @@ ns_src_free(ns_src **src, int srclistsize)
 
 
 
+#ifndef __rtems__
 /*
  * NSS module management.
  */
@@ -571,6 +588,43 @@ nss_atexit(void)
 	if (isthreaded)
 		(void)_pthread_rwlock_unlock(&nss_lock);
 }
+#else /* __rtems__ */
+int
+rtems_nss_register_module(const char *source, ns_mtab *mtab,
+    unsigned int mtabsize)
+{
+	ns_mod mod;
+	int result;
+
+	if (mtab == NULL || mtabsize == 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	memset(&mod, 0, sizeof(mod));
+	mod.name = strdup(source);
+	if (mod.name == NULL) {
+		return -1;
+	}
+	mod.handle = (void *)1;
+	mod.mtab = mtab;
+	mod.mtabsize = mtabsize;
+	qsort(mod.mtab, mod.mtabsize, sizeof(mod.mtab[0]), mtab_compare);
+
+	result = _pthread_rwlock_wrlock(&nss_lock);
+	if (result != 0) {
+		errno = result;
+		return -1;
+	}
+
+	_nsmod = vector_append(&mod, _nsmod, &_nsmodsize, sizeof(*_nsmod));
+	vector_sort(_nsmod, _nsmodsize, sizeof(*_nsmod), string_compare);
+
+	(void)_pthread_rwlock_unlock(&nss_lock);
+
+	return 0;
+}
+#endif /* __rtems__ */
 
 /*
  * Finally, the actual implementation.

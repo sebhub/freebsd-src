@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-namespace.h"
+#endif /* __rtems__ */
+
 /*	$OpenBSD: pfctl_osfp.c,v 1.14 2006/04/08 02:13:14 ray Exp $ */
 
 /*
@@ -19,6 +23,9 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#endif /* __rtems__ */
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -39,6 +46,9 @@ __FBSDID("$FreeBSD$");
 
 #include "pfctl_parser.h"
 #include "pfctl.h"
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-pfctl_osfp-data.h"
+#endif /* __rtems__ */
 
 #ifndef MIN
 # define MIN(a,b)	(((a) < (b)) ? (a) : (b))

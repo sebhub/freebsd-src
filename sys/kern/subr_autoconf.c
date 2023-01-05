@@ -61,6 +61,9 @@ static TAILQ_HEAD(, intr_config_hook) intr_config_hook_list =
 static struct intr_config_hook *next_to_notify;
 static struct mtx intr_config_hook_lock;
 MTX_SYSINIT(intr_config_hook, &intr_config_hook_lock, "intr config", MTX_DEF);
+#ifdef __rtems__
+static bool intr_boot_done;
+#endif /* __rtems__ */
 
 /* ARGSUSED */
 static void run_interrupt_driven_config_hooks(void);
@@ -95,18 +98,22 @@ static void
 run_interrupt_driven_config_hooks_warning(int warned)
 {
 	struct intr_config_hook *hook_entry;
+#ifndef __rtems__
 	char namebuf[64];
 	long offset;
+#endif /* __rtems__ */
 
 	if (warned < 6) {
 		printf("run_interrupt_driven_hooks: still waiting after %d "
 		    "seconds for", warned * WARNING_INTERVAL_SECS);
 		TAILQ_FOREACH(hook_entry, &intr_config_hook_list, ich_links) {
+#ifndef __rtems__
 			if (linker_search_symbol_name(
 			    (caddr_t)hook_entry->ich_func, namebuf,
 			    sizeof(namebuf), &offset) == 0)
 				printf(" %s", namebuf);
 			else
+#endif /* __rtems__ */
 				printf(" %p", hook_entry->ich_func);
 		}
 		printf("\n");
@@ -168,6 +175,9 @@ boot_run_interrupt_driven_config_hooks(void *dummy)
 			mtx_lock(&intr_config_hook_lock);
 		}
 	}
+#ifdef __rtems__
+	intr_boot_done = true;
+#endif /* __rtems__ */
 	mtx_unlock(&intr_config_hook_lock);
 	TSUNWAIT("config hooks");
 }
@@ -184,6 +194,9 @@ int
 config_intrhook_establish(struct intr_config_hook *hook)
 {
 	struct intr_config_hook *hook_entry;
+#ifdef __rtems__
+	bool run;
+#endif /* __rtems__ */
 
 	TSHOLD("config hooks");
 	mtx_lock(&intr_config_hook_lock);
@@ -199,8 +212,15 @@ config_intrhook_establish(struct intr_config_hook *hook)
 	TAILQ_INSERT_TAIL(&intr_config_hook_list, hook, ich_links);
 	if (next_to_notify == NULL)
 		next_to_notify = hook;
+#ifdef __rtems__
+	run = intr_boot_done;
+#endif /* __rtems__ */
 	mtx_unlock(&intr_config_hook_lock);
+#ifndef __rtems__
 	if (cold == 0)
+#else /* __rtems__ */
+	if (run)
+#endif /* __rtems__ */
 		/*
 		 * XXX Call from a task since not all drivers expect
 		 *     to be re-entered at the time a hook is established.

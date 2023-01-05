@@ -108,8 +108,13 @@
 _Static_assert(sizeof(((struct ifreq *)0)->ifr_name) ==
     offsetof(struct ifreq, ifr_ifru), "gap between ifr_name and ifr_ifru");
 
+#ifndef __rtems__
 __read_mostly epoch_t net_epoch_preempt;
 __read_mostly epoch_t net_epoch;
+#else /* __rtems__ */
+EPOCH_DEFINE(_bsd_net_epoch_preempt, EPOCH_PREEMPT);
+EPOCH_DEFINE(_bsd_net_epoch, 0);
+#endif /* __rtems__ */
 #ifdef COMPAT_FREEBSD32
 #include <sys/mount.h>
 #include <compat/freebsd32/freebsd32.h>
@@ -912,6 +917,7 @@ if_attach_internal(struct ifnet *ifp, int vmove, struct if_clone *ifc)
 	rt_ifannouncemsg(ifp, IFAN_ARRIVAL);
 }
 
+#ifndef __rtems__
 static void
 if_epochalloc(void *dummy __unused)
 {
@@ -921,6 +927,7 @@ if_epochalloc(void *dummy __unused)
 }
 SYSINIT(ifepochalloc, SI_SUB_TASKQ + 1, SI_ORDER_ANY,
     if_epochalloc, NULL);
+#endif /* __rtems__ */
 
 static void
 if_attachdomain(void *dummy)
@@ -1755,6 +1762,7 @@ if_data_copy(struct ifnet *ifp, struct if_data *ifd)
 	ifd->ifi_noproto = ifp->if_get_counter(ifp, IFCOUNTER_NOPROTO);
 }
 
+#ifndef __rtems__
 struct ifnet_read_lock {
 	struct mtx mtx;	/* lock protecting tracker below */
 	struct epoch_tracker et;
@@ -1778,6 +1786,7 @@ ifnet_read_lock_init(void __unused *arg)
 	}
 }
 SYSINIT(ifnet_read_lock_init, SI_SUB_CPU + 1, SI_ORDER_FIRST, &ifnet_read_lock_init, NULL);
+#endif /* __rtems__ */
 
 /*
  * Wrapper functions for struct ifnet address list locking macros.  These are
@@ -1788,17 +1797,22 @@ SYSINIT(ifnet_read_lock_init, SI_SUB_CPU + 1, SI_ORDER_FIRST, &ifnet_read_lock_i
 void
 if_addr_rlock(struct ifnet *ifp)
 {
+#ifndef __rtems__
 	struct ifnet_read_lock *pifrl;
 
 	sched_pin();
 	pifrl = DPCPU_PTR(ifnet_addr_read_lock);
 	mtx_lock(&pifrl->mtx);
 	epoch_enter_preempt(net_epoch_preempt, &pifrl->et);
+#else /* __rtems__ */
+	epoch_enter_preempt(net_epoch_preempt, curthread->td_et);
+#endif /* __rtems__ */
 }
 
 void
 if_addr_runlock(struct ifnet *ifp)
 {
+#ifndef __rtems__
 	struct ifnet_read_lock *pifrl;
 
 	pifrl = DPCPU_PTR(ifnet_addr_read_lock);
@@ -1806,22 +1820,30 @@ if_addr_runlock(struct ifnet *ifp)
 	epoch_exit_preempt(net_epoch_preempt, &pifrl->et);
 	mtx_unlock(&pifrl->mtx);
 	sched_unpin();
+#else /* __rtems__ */
+	epoch_exit_preempt(net_epoch_preempt, curthread->td_et);
+#endif /* __rtems__ */
 }
 
 void
 if_maddr_rlock(if_t ifp)
 {
+#ifndef __rtems__
 	struct ifnet_read_lock *pifrl;
 
 	sched_pin();
 	pifrl = DPCPU_PTR(ifnet_maddr_read_lock);
 	mtx_lock(&pifrl->mtx);
 	epoch_enter_preempt(net_epoch_preempt, &pifrl->et);
+#else /* __rtems__ */
+	epoch_enter_preempt(net_epoch_preempt, curthread->td_et);
+#endif /* __rtems__ */
 }
 
 void
 if_maddr_runlock(if_t ifp)
 {
+#ifndef __rtems__
 	struct ifnet_read_lock *pifrl;
 
 	pifrl = DPCPU_PTR(ifnet_maddr_read_lock);
@@ -1829,6 +1851,9 @@ if_maddr_runlock(if_t ifp)
 	epoch_exit_preempt(net_epoch_preempt, &pifrl->et);
 	mtx_unlock(&pifrl->mtx);
 	sched_unpin();
+#else /* __rtems__ */
+	epoch_exit_preempt(net_epoch_preempt, curthread->td_et);
+#endif /* __rtems__ */
 }
 
 /*
@@ -2958,6 +2983,22 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 			return (error);
 		break;
 
+#ifdef __rtems__
+	case RTEMS_SIOSIFINPUT:
+		if (ifp->if_input_arg == NULL) {
+			struct rtems_ifinputreq *ifipfr;
+
+			ifipfr = (struct rtems_ifinputreq *)data;
+			ifipfr->old_if_input = ifp->if_input;
+			ifp->if_input_arg = ifipfr->arg;
+			(*ifipfr->init)(ifp, ifipfr->arg);
+			ifp->if_input = ifipfr->new_if_input;
+			error = 0;
+		} else {
+			return (EEXIST);
+		}
+		break;
+#endif /* __rtems__ */
 	default:
 		error = ENOIOCTL;
 		break;

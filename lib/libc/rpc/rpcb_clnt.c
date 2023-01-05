@@ -32,7 +32,6 @@
 
 /* #ident	"@(#)rpcb_clnt.c	1.27	94/04/24 SMI" */
 
-
 #if defined(LIBC_SCCS) && !defined(lint)
 static char sccsid[] = "@(#)rpcb_clnt.c 1.30 89/06/21 Copyr 1988 Sun Micro";
 #endif
@@ -360,7 +359,11 @@ getclnthandle(const char *host, const struct netconfig *nconf, char **targaddr)
 			return (client);
 		}
 	} else {
+#ifndef __rtems__
 		if (getaddrinfo(host, "sunrpc", &hints, &res) != 0) {
+#else /* __rtems__ */
+		if (getaddrinfo(host, "111", &hints, &res) != 0) {
+#endif /* __rtems__ */
 			rpc_createerr.cf_stat = RPC_UNKNOWNHOST;
 			return NULL;
 		}

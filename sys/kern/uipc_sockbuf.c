@@ -440,7 +440,11 @@ sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
 	if (cc > sb_max_adj)
 		return (0);
 	if (td != NULL) {
+#ifndef __rtems__
 		sbsize_limit = lim_cur(td, RLIMIT_SBSIZE);
+#else /* __rtems__ */
+		sbsize_limit = RLIM_INFINITY;
+#endif /* __rtems__ */
 	} else
 		sbsize_limit = RLIM_INFINITY;
 	if (!chgsbsize(so->so_cred->cr_uidinfo, &sb->sb_hiwat, cc,
@@ -1272,7 +1276,11 @@ sbsndptr(struct sockbuf *sb, u_int off, u_int len, u_int *moff)
 }
 
 struct mbuf *
+#ifndef __rtems__
 sbsndptr_noadv(struct sockbuf *sb, uint32_t off, uint32_t *moff)
+#else /* __rtems__ */
+sbsndptr_noadv(struct sockbuf *sb, u_int off, u_int *moff)
+#endif /* __rtems__ */
 {
 	struct mbuf *m;
 
@@ -1293,7 +1301,11 @@ sbsndptr_noadv(struct sockbuf *sb, uint32_t off, uint32_t *moff)
 }
 
 void
+#ifndef __rtems__
 sbsndptr_adv(struct sockbuf *sb, struct mbuf *mb, uint32_t len)
+#else /* __rtems__ */
+sbsndptr_adv(struct sockbuf *sb, struct mbuf *mb, u_int len)
+#endif /* __rtems__ */
 {
 	/*
 	 * A small copy was done, advance forward the sb_sbsndptr to cover

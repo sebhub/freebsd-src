@@ -229,6 +229,7 @@ VNET_DEFINE_STATIC(u_int,	netisr_enable[NETISR_MAXPROT]);
 #define	V_netisr_enable		VNET(netisr_enable)
 #endif
 
+#ifndef __rtems__
 /*
  * Per-CPU workstream data.  See netisr_internal.h for more details.
  */
@@ -248,6 +249,9 @@ static u_int				 nws_array[MAXCPU];
 static u_int				 nws_count;
 SYSCTL_UINT(_net_isr, OID_AUTO, numthreads, CTLFLAG_RD,
     &nws_count, 0, "Number of extant netisr threads.");
+#else /* __rtems__ */
+static struct netisr_workstream rtems_bsd_nws;
+#endif /* __rtems__ */
 
 /*
  * Synchronization for each workstream: a mutex protects all mutable fields
@@ -259,6 +263,7 @@ SYSCTL_UINT(_net_isr, OID_AUTO, numthreads, CTLFLAG_RD,
 #define	NWS_UNLOCK(s)		mtx_unlock(&(s)->nws_mtx)
 #define	NWS_SIGNAL(s)		swi_sched((s)->nws_swi_cookie, 0)
 
+#ifndef __rtems__
 /*
  * Utility routines for protocols that implement their own mapping of flows
  * to CPUs.
@@ -289,6 +294,7 @@ netisr_default_flow2cpu(u_int flowid)
 
 	return (nws_array[flowid % nws_count]);
 }
+#endif  /* __rtems__ */
 
 /*
  * Dispatch tunable and sysctl configuration.
@@ -433,7 +439,11 @@ netisr_register(const struct netisr_handler *nhp)
 	netisr_proto[proto].np_policy = nhp->nh_policy;
 	netisr_proto[proto].np_dispatch = nhp->nh_dispatch;
 	CPU_FOREACH(i) {
+#ifndef __rtems__
 		npwp = &(DPCPU_ID_PTR(i, nws))->nws_work[proto];
+#else /* __rtems__ */
+		npwp = &rtems_bsd_nws.nws_work[proto];
+#endif /* __rtems__ */
 		bzero(npwp, sizeof(*npwp));
 		npwp->nw_qlimit = netisr_proto[proto].np_qlimit;
 	}
@@ -481,7 +491,11 @@ netisr_clearqdrops(const struct netisr_handler *nhp)
 	    name));
 
 	CPU_FOREACH(i) {
+#ifndef __rtems__
 		npwp = &(DPCPU_ID_PTR(i, nws))->nws_work[proto];
+#else /* __rtems__ */
+		npwp = &rtems_bsd_nws.nws_work[proto];
+#endif /* __rtems__ */
 		npwp->nw_qdrops = 0;
 	}
 	NETISR_WUNLOCK();
@@ -514,7 +528,11 @@ netisr_getqdrops(const struct netisr_handler *nhp, u_int64_t *qdropp)
 	    name));
 
 	CPU_FOREACH(i) {
+#ifndef __rtems__
 		npwp = &(DPCPU_ID_PTR(i, nws))->nws_work[proto];
+#else /* __rtems__ */
+		npwp = &rtems_bsd_nws.nws_work[proto];
+#endif /* __rtems__ */
 		*qdropp += npwp->nw_qdrops;
 	}
 	NETISR_RUNLOCK(&tracker);
@@ -578,7 +596,11 @@ netisr_setqlimit(const struct netisr_handler *nhp, u_int qlimit)
 
 	netisr_proto[proto].np_qlimit = qlimit;
 	CPU_FOREACH(i) {
+#ifndef __rtems__
 		npwp = &(DPCPU_ID_PTR(i, nws))->nws_work[proto];
+#else /* __rtems__ */
+		npwp = &rtems_bsd_nws.nws_work[proto];
+#endif /* __rtems__ */
 		npwp->nw_qlimit = qlimit;
 	}
 	NETISR_WUNLOCK();
@@ -653,7 +675,11 @@ netisr_unregister(const struct netisr_handler *nhp)
 	netisr_proto[proto].np_qlimit = 0;
 	netisr_proto[proto].np_policy = 0;
 	CPU_FOREACH(i) {
+#ifndef __rtems__
 		npwp = &(DPCPU_ID_PTR(i, nws))->nws_work[proto];
+#else /* __rtems__ */
+		npwp = &rtems_bsd_nws.nws_work[proto];
+#endif /* __rtems__ */
 		netisr_drain_proto(npwp);
 		bzero(npwp, sizeof(*npwp));
 	}
@@ -781,6 +807,7 @@ netisr_select_cpuid(struct netisr_proto *npp, u_int dispatch_policy,
 
 	NETISR_LOCK_ASSERT();
 
+#ifndef __rtems__
 	/*
 	 * In the event we have only one worker, shortcut and deliver to it
 	 * without further ado.
@@ -844,6 +871,9 @@ netisr_select_cpuid(struct netisr_proto *npp, u_int dispatch_policy,
 		*cpuidp = nws_array[(ifp->if_index + source) % nws_count];
 	else
 		*cpuidp = nws_array[source % nws_count];
+#else /* __rtems__ */
+	*cpuidp = 0;
+#endif /* __rtems__ */
 	return (m);
 }
 
@@ -1015,7 +1045,11 @@ netisr_queue_internal(u_int proto, struct mbuf *m, u_int cpuid)
 
 	dosignal = 0;
 	error = 0;
+#ifndef __rtems__
 	nwsp = DPCPU_ID_PTR(cpuid, nws);
+#else /* __rtems__ */
+	nwsp = &rtems_bsd_nws;
+#endif /* __rtems__ */
 	npwp = &nwsp->nws_work[proto];
 	NWS_LOCK(nwsp);
 	error = netisr_queue_workstream(nwsp, proto, npwp, m, &dosignal);
@@ -1115,7 +1149,11 @@ netisr_dispatch_src(u_int proto, uintptr_t source, struct mbuf *m)
 	 * to always being forced to directly dispatch.
 	 */
 	if (dispatch_policy == NETISR_DISPATCH_DIRECT) {
+#ifndef __rtems__
 		nwsp = DPCPU_PTR(nws);
+#else /* __rtems__ */
+		nwsp = &rtems_bsd_nws;
+#endif /* __rtems__ */
 		npwp = &nwsp->nws_work[proto];
 		npwp->nw_dispatched++;
 		npwp->nw_handled++;
@@ -1132,7 +1170,9 @@ netisr_dispatch_src(u_int proto, uintptr_t source, struct mbuf *m)
 	 * dispatch if we're on the right CPU and the netisr worker isn't
 	 * already running.
 	 */
+#ifndef __rtems__
 	sched_pin();
+#endif /* __rtems__ */
 	m = netisr_select_cpuid(&netisr_proto[proto], NETISR_DISPATCH_HYBRID,
 	    source, m, &cpuid);
 	if (m == NULL) {
@@ -1142,7 +1182,11 @@ netisr_dispatch_src(u_int proto, uintptr_t source, struct mbuf *m)
 	KASSERT(!CPU_ABSENT(cpuid), ("%s: CPU %u absent", __func__, cpuid));
 	if (cpuid != curcpu)
 		goto queue_fallback;
+#ifndef __rtems__
 	nwsp = DPCPU_PTR(nws);
+#else /* __rtems__ */
+	nwsp = &rtems_bsd_nws;
+#endif /* __rtems__ */
 	npwp = &nwsp->nws_work[proto];
 
 	/*-
@@ -1198,7 +1242,9 @@ netisr_dispatch_src(u_int proto, uintptr_t source, struct mbuf *m)
 queue_fallback:
 	error = netisr_queue_internal(proto, m, cpuid);
 out_unpin:
+#ifndef __rtems__
 	sched_unpin();
+#endif  /* __rtems__ */
 out_unlock:
 #ifdef NETISR_LOCKING
 	NETISR_RUNLOCK(&tracker);
@@ -1238,7 +1284,11 @@ netisr_start_swi(u_int cpuid, struct pcpu *pc)
 
 	KASSERT(!CPU_ABSENT(cpuid), ("%s: CPU %u absent", __func__, cpuid));
 
+#ifndef __rtems__
 	nwsp = DPCPU_ID_PTR(cpuid, nws);
+#else /* __rtems__ */
+	nwsp = &rtems_bsd_nws;
+#endif /* __rtems__ */
 	mtx_init(&nwsp->nws_mtx, "netisr_mtx", NULL, MTX_DEF);
 	nwsp->nws_cpu = cpuid;
 	snprintf(swiname, sizeof(swiname), "netisr %u", cpuid);
@@ -1246,6 +1296,7 @@ netisr_start_swi(u_int cpuid, struct pcpu *pc)
 	    SWI_NET, INTR_MPSAFE, &nwsp->nws_swi_cookie);
 	if (error)
 		panic("%s: swi_add %d", __func__, error);
+#ifndef __rtems__
 	pc->pc_netisr = nwsp->nws_intr_event;
 	if (netisr_bindthreads) {
 		error = intr_event_bind(nwsp->nws_intr_event, cpuid);
@@ -1257,6 +1308,7 @@ netisr_start_swi(u_int cpuid, struct pcpu *pc)
 	nws_array[nws_count] = nwsp->nws_cpu;
 	nws_count++;
 	NETISR_WUNLOCK();
+#endif /* __rtems__ */
 }
 
 /*
@@ -1308,12 +1360,17 @@ netisr_init(void *arg)
 		netisr_start_swi(pc->pc_cpuid, pc);
 	}
 #else
+#ifndef __rtems__
 	pc = get_pcpu();
 	netisr_start_swi(pc->pc_cpuid, pc);
+#else /* __rtems__ */
+	netisr_start_swi(0, NULL);
+#endif /* __rtems__ */
 #endif
 }
 SYSINIT(netisr_init, SI_SUB_SOFTINTR, SI_ORDER_FIRST, netisr_init, NULL);
 
+#ifndef __rtems__
 #ifndef EARLY_AP_STARTUP
 /*
  * Start worker threads for additional CPUs.  No attempt to gracefully handle
@@ -1335,6 +1392,7 @@ netisr_start(void *arg)
 }
 SYSINIT(netisr_start, SI_SUB_SMP, SI_ORDER_MIDDLE, netisr_start, NULL);
 #endif
+#endif /* __rtems__ */
 
 /*
  * Sysctl monitoring for netisr: query a list of registered protocols.
@@ -1405,7 +1463,11 @@ sysctl_netisr_workstream(SYSCTL_HANDLER_ARGS)
 	counter = 0;
 	NETISR_RLOCK(&tracker);
 	CPU_FOREACH(cpuid) {
+#ifndef __rtems__
 		nwsp = DPCPU_ID_PTR(cpuid, nws);
+#else /* __rtems__ */
+		nwsp = &rtems_bsd_nws;
+#endif /* __rtems__ */
 		if (nwsp->nws_intr_event == NULL)
 			continue;
 		NWS_LOCK(nwsp);
@@ -1459,7 +1521,11 @@ sysctl_netisr_work(SYSCTL_HANDLER_ARGS)
 	counter = 0;
 	NETISR_RLOCK(&tracker);
 	CPU_FOREACH(cpuid) {
+#ifndef __rtems__
 		nwsp = DPCPU_ID_PTR(cpuid, nws);
+#else /* __rtems__ */
+		nwsp = &rtems_bsd_nws;
+#endif /* __rtems__ */
 		if (nwsp->nws_intr_event == NULL)
 			continue;
 		NWS_LOCK(nwsp);
@@ -1508,7 +1574,11 @@ DB_SHOW_COMMAND(netisr, db_show_netisr)
 	db_printf("%3s %6s %5s %5s %5s %8s %8s %8s %8s\n", "CPU", "Proto",
 	    "Len", "WMark", "Max", "Disp", "HDisp", "Drop", "Queue");
 	CPU_FOREACH(cpuid) {
+#ifndef __rtems__
 		nwsp = DPCPU_ID_PTR(cpuid, nws);
+#else /* __rtems__ */
+		nwsp = &rtems_bsd_nws;
+#endif /* __rtems__ */
 		if (nwsp->nws_intr_event == NULL)
 			continue;
 		first = 1;

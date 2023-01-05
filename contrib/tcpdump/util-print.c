@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1990, 1991, 1993, 1994, 1995, 1996, 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -329,6 +333,9 @@ ts_print(netdissect_options *ndo,
 	struct tm *tm;
 	time_t Time;
 	char buf[TS_BUF_SIZE];
+#ifdef __rtems__
+	__section(".rtemsrwset.bsd_prog_tcpdump.content")
+#endif /* __rtems__ */
 	static struct timeval tv_ref;
 	struct timeval tv_result;
 	int negative_offset;
@@ -407,9 +414,9 @@ void
 unsigned_relts_print(netdissect_options *ndo,
                      uint32_t secs)
 {
-	static const char *lengths[] = {"y", "w", "d", "h", "m", "s"};
+	static const char * const lengths[] = {"y", "w", "d", "h", "m", "s"};
 	static const u_int seconds[] = {31536000, 604800, 86400, 3600, 60, 1};
-	const char **l = lengths;
+	const char * const *l = lengths;
 	const u_int *s = seconds;
 
 	if (secs == 0) {
@@ -516,6 +523,9 @@ tok2str(register const struct tok *lp, register const char *fmt,
 	register u_int v)
 {
 	static char buf[4][TOKBUFSIZE];
+#ifdef __rtems__
+	__section(".rtemsrwset.bsd_prog_tcpdump.content")
+#endif /* __rtems__ */
 	static int idx = 0;
 	char *ret;
 
@@ -961,3 +971,6 @@ unaligned_memcmp(const void *p, const void *q, size_t l)
 }
 #endif
 
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-util-print-data.h"
+#endif /* __rtems__ */

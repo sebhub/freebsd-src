@@ -23,6 +23,11 @@
 #include <mach/mach_time.h>
 #endif /* __MACH__ */
 
+#ifdef __rtems__
+#include <stdlib.h>
+#endif /* __rtems__ */
+
+
 #include "os.h"
 #include "common.h"
 
@@ -226,7 +231,7 @@ static int os_daemon(int nochdir, int noclose)
 
 int os_daemonize(const char *pid_file)
 {
-#if defined(__uClinux__) || defined(__sun__)
+#if defined(__uClinux__) || defined(__sun__) || defined(__rtems__)
 	return -1;
 #else /* defined(__uClinux__) || defined(__sun__) */
 #ifdef __FreeBSD__
@@ -290,6 +295,10 @@ int os_get_random(unsigned char *buf, size_t len)
 	if (TEST_FAIL())
 		return -1;
 
+#ifdef __rtems__
+	arc4random_buf(buf, len);
+	return 0;
+#else /* __rtems__ */
 	f = fopen("/dev/urandom", "rb");
 	if (f == NULL) {
 		printf("Could not open /dev/urandom.\n");
@@ -300,6 +309,7 @@ int os_get_random(unsigned char *buf, size_t len)
 	fclose(f);
 
 	return rc != len ? -1 : 0;
+#endif /* __rtems__ */
 #endif /* TEST_FUZZ */
 }
 

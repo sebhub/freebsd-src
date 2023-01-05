@@ -1,3 +1,8 @@
+#ifdef __rtems__
+#include "rtems-bsd-ifmcstat-namespace.h"
+#include "rtems-bsd-ifmcstat-ifmcstat-data.h"
+#endif /* __rtems__ */
+
 /*	$KAME: ifmcstat.c,v 1.48 2006/11/15 05:13:59 itojun Exp $	*/
 
 /*-
@@ -32,6 +37,13 @@
  * SUCH DAMAGE.
  */
 
+#ifdef __rtems__
+#define __need_getopt_newlib
+#include <getopt.h>
+#include <machine/rtems-bsd-program.h>
+#include <machine/rtems-bsd-commands.h>
+#include <rtems/libio_.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -110,11 +122,20 @@ union sockunion {
 };
 typedef union sockunion sockunion_t;
 
+#ifdef __rtems__
+static
+#endif /* __rtems__ */
 uint32_t	ifindex = 0;
+#ifdef __rtems__
+static
+#endif /* __rtems__ */
 int		af = AF_UNSPEC;
 #ifdef WITH_KVM
 int		Kflag = 0;
 #endif
+#ifdef __rtems__
+static
+#endif /* __rtems__ */
 int		vflag = 0;
 
 #define	sa_dl_equal(a1, a2)	\
@@ -168,7 +189,31 @@ static const char *	inm_mode(u_int mode);
 static void		in6_ifinfo(struct mld_ifinfo *);
 static const char *	inet6_n2a(struct in6_addr *, uint32_t);
 #endif
+#ifdef __rtems__
+static int main(int argc, char *argv[]);
+
+RTEMS_LINKER_RWSET(bsd_prog_ifmcstat, char);
+
+int
+rtems_bsd_command_ifmcstat(int argc, char *argv[])
+{
+	int exit_code;
+	void *data_begin;
+	size_t data_size;
+
+	data_begin = RTEMS_LINKER_SET_BEGIN(bsd_prog_ifmcstat);
+	data_size = RTEMS_LINKER_SET_SIZE(bsd_prog_ifmcstat);
+
+	rtems_bsd_program_lock();
+	exit_code = rtems_bsd_program_call_main_with_data_restore("ifmcstat",
+	    main, argc, argv, data_begin, data_size);
+	rtems_bsd_program_unlock();
+
+	return exit_code;
+}
+#else /* __rtems__ */
 int			main(int, char **);
+#endif /* __rtems__ */
 
 static void
 usage()
@@ -184,7 +229,7 @@ usage()
 	exit(EX_USAGE);
 }
 
-static const char *options = "i:f:vM:N:"
+static const char * const options = "i:f:vM:N:"
 #ifdef WITH_KVM
 	"K"
 #endif
@@ -308,7 +353,7 @@ in_ifinfo(struct igmp_ifinfo *igi)
 	printf("\n");
 }
 
-static const char *inm_modes[] = {
+static const char * const inm_modes[] = {
 	"undefined",
 	"include",
 	"exclude",

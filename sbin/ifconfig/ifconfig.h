@@ -157,4 +157,23 @@ void	sfp_status(int s, struct ifreq *ifr, int verbose);
 struct ifmediareq *ifmedia_getstate(int s);
 
 void print_vhid(const struct ifaddrs *, const char *);
+#ifdef __rtems__
+void bridge_ctor(void);
+void carp_ctor(void);
+void clone_ctor(void);
+void gif_ctor(void);
+void gre_ctor(void);
+void group_ctor(void);
+void ieee80211_ctor(void);
+void ifmedia_ctor(void);
+void inet6_ctor(void);
+void inet_ctor(void);
+void lagg_ctor(void);
+void link_ctor(void);
+void mac_ctor(void);
+void pfsync_ctor(void);
+void vlan_ctor(void);
 
+/* Necessary for struct ifmedia_description */
+#include <if_media.h>
+#endif /* __rtems__ */

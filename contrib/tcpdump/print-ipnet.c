@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /* \summary: Solaris DLT_IPNET printer */
 
 #ifdef HAVE_CONFIG_H
@@ -125,3 +129,6 @@ ipnet_if_print(netdissect_options *ndo,
  */
 
 #endif /* DLT_IPNET */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-ipnet-data.h"
+#endif /* __rtems__ */

@@ -101,8 +101,10 @@ struct	sockbuf {
 	short	sb_flags;	/* (a) flags, see below */
 	int	(*sb_upcall)(struct socket *, void *, int); /* (a) */
 	void	*sb_upcallarg;	/* (a) */
+#ifndef __rtems__
 	TAILQ_HEAD(, kaiocb) sb_aiojobq; /* (a) pending AIO ops */
 	struct	task sb_aiotask; /* AIO task */
+#endif /* __rtems__ */
 };
 
 #endif	/* defined(_KERNEL) || defined(_WANT_SOCKET) */

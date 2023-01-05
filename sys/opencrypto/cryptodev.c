@@ -38,6 +38,9 @@
  * Materiel Command, USAF, under agreement number F30602-01-2-0537.
  */
 
+#ifdef __rtems__
+#include <sys/file.h>
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -301,6 +304,7 @@ SYSCTL_TIMEVAL_SEC(_kern, OID_AUTO, cryptodev_warn_interval, CTLFLAG_RW,
     &warninterval,
     "Delay in seconds between warnings of deprecated /dev/crypto algorithms");
 
+#ifndef __rtems__
 static	int cryptof_ioctl(struct file *, u_long, void *,
 		    struct ucred *, struct thread *);
 static	int cryptof_stat(struct file *, struct stat *,
@@ -323,6 +327,9 @@ static struct fileops cryptofops = {
     .fo_sendfile = invfo_sendfile,
     .fo_fill_kinfo = cryptof_fill_kinfo,
 };
+#else /* __rtems__ */
+static const rtems_filesystem_file_handlers_r cryptofops;
+#endif /* __rtems__ */
 
 static struct csession *csefind(struct fcrypt *, u_int);
 static bool csedelete(struct fcrypt *, u_int);
@@ -766,6 +773,24 @@ bail:
 	return (error);
 #undef SES2
 }
+#ifdef __rtems__
+static int
+rtems_bsd_cryptof_ioctl(rtems_libio_t *iop, ioctl_command_t request,
+    void *buffer)
+{
+	struct thread *td;
+	int error;
+
+	td = rtems_bsd_get_curthread_or_null();
+	if (td != NULL) {
+		error = cryptof_ioctl(iop, request, buffer, NULL, td);
+	} else {
+		error = ENOMEM;
+	}
+
+	return (rtems_bsd_error_to_status_and_errno(error));
+}
+#endif /* __rtems__ */
 
 static int cryptodev_cb(struct cryptop *);
 
@@ -1356,11 +1381,17 @@ cryptodev_find(struct crypt_find_op *find)
 
 /* ARGSUSED */
 static int
+#ifndef __rtems__
 cryptof_stat(
 	struct file *fp,
 	struct stat *sb,
 	struct ucred *active_cred,
 	struct thread *td)
+#else /* __rtems__ */
+rtems_bsd_cryptof_stat(const rtems_filesystem_location_info_t *loc,
+    struct stat *buf
+#endif /* __rtems__ */
+)
 {
 
 	return (EOPNOTSUPP);
@@ -1384,7 +1415,25 @@ cryptof_close(struct file *fp, struct thread *td)
 	fp->f_data = NULL;
 	return 0;
 }
+#ifdef __rtems__
+static int
+rtems_bsd_cryptof_close(rtems_libio_t *iop)
+{
+	struct thread *td;
+	int error;
 
+	td = rtems_bsd_get_curthread_or_null();
+	if (td != NULL) {
+		error = cryptof_close(iop, td);
+	} else {
+		error = ENOMEM;
+	}
+
+	return (rtems_bsd_error_to_status_and_errno(error));
+}
+#endif /* __rtems__ */
+
+#ifndef __rtems__
 static int
 cryptof_fill_kinfo(struct file *fp, struct kinfo_file *kif, struct filedesc *fdp)
 {
@@ -1392,6 +1441,7 @@ cryptof_fill_kinfo(struct file *fp, struct kinfo_file *kif, struct filedesc *fdp
 	kif->kf_type = KF_TYPE_CRYPTO;
 	return (0);
 }
+#endif /* __rtems__ */
 
 static struct csession *
 csefind(struct fcrypt *fcr, u_int ses)
@@ -1512,7 +1562,9 @@ cryptoioctl(struct cdev *dev, u_long cmd, caddr_t data, int flag, struct thread 
 		/* falloc automatically provides an extra reference to 'f'. */
 		finit(f, FREAD | FWRITE, DTYPE_CRYPTO, fcr, &cryptofops);
 		*(u_int32_t *)data = fd;
+#ifndef __rtems__
 		fdrop(f, td);
+#endif /* __rtems__ */
 		break;
 	case CRIOFINDDEV:
 		error = cryptodev_find((struct crypt_find_op *)data);
@@ -1569,3 +1621,23 @@ MODULE_VERSION(cryptodev, 1);
 DECLARE_MODULE(cryptodev, cryptodev_mod, SI_SUB_PSEUDO, SI_ORDER_ANY);
 MODULE_DEPEND(cryptodev, crypto, 1, 1, 1);
 MODULE_DEPEND(cryptodev, zlib, 1, 1, 1);
+#ifdef __rtems__
+static const rtems_filesystem_file_handlers_r cryptofops = {
+	.open_h = rtems_filesystem_default_open,
+	.close_h = rtems_bsd_cryptof_close,
+	.read_h = rtems_filesystem_default_read,
+	.write_h = rtems_filesystem_default_write,
+	.ioctl_h = rtems_bsd_cryptof_ioctl,
+	.lseek_h = rtems_filesystem_default_lseek,
+	.fstat_h = rtems_bsd_cryptof_stat,
+	.ftruncate_h = rtems_filesystem_default_ftruncate,
+	.fsync_h = rtems_filesystem_default_fsync_or_fdatasync,
+	.fdatasync_h = rtems_filesystem_default_fsync_or_fdatasync,
+	.fcntl_h = rtems_filesystem_default_fcntl,
+	.poll_h = rtems_filesystem_default_poll,
+	.kqfilter_h = rtems_filesystem_default_kqfilter,
+	.readv_h = rtems_filesystem_default_readv,
+	.writev_h = rtems_filesystem_default_writev,
+	.mmap_h = rtems_filesystem_default_mmap
+};
+#endif /* __rtems__ */

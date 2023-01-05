@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -1257,7 +1261,13 @@ struct hnamemem *
 newhnamemem(netdissect_options *ndo)
 {
 	register struct hnamemem *p;
+#ifdef __rtems__
+	__section(".rtemsrwset.bsd_prog_tcpdump.content")
+#endif /* __rtems__ */
 	static struct hnamemem *ptr = NULL;
+#ifdef __rtems__
+	__section(".rtemsrwset.bsd_prog_tcpdump.content")
+#endif /* __rtems__ */
 	static u_int num = 0;
 
 	if (num  <= 0) {
@@ -1276,7 +1286,13 @@ struct h6namemem *
 newh6namemem(netdissect_options *ndo)
 {
 	register struct h6namemem *p;
+#ifdef __rtems__
+	__section(".rtemsrwset.bsd_prog_tcpdump.content")
+#endif /* __rtems__ */
 	static struct h6namemem *ptr = NULL;
+#ifdef __rtems__
+	__section(".rtemsrwset.bsd_prog_tcpdump.content")
+#endif /* __rtems__ */
 	static u_int num = 0;
 
 	if (num  <= 0) {
@@ -1301,3 +1317,6 @@ ieee8021q_tci_string(const uint16_t tci)
 	         (tci & 0x1000) ? ", DEI" : "");
 	return buf;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-addrtoname-data.h"
+#endif /* __rtems__ */

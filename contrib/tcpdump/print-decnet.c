@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1992, 1993, 1994, 1995, 1996, 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -1238,3 +1242,6 @@ dnnum_string(netdissect_options *ndo, u_short dnaddr)
 	snprintf(str, siz, "%d.%d", area, node);
 	return(str);
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-decnet-data.h"
+#endif /* __rtems__ */

@@ -172,6 +172,9 @@ struct sctp_nat_msg {
 	uint16_t msg;			/**< one of the key messages defined above */
 #ifdef INET6
 	//  struct ip6_hdr *ip_hdr;	/**< pointer to ip packet header */ /*no inet6 support yet*/
+#ifdef __rtems__
+	struct ip *ip_hdr;		/**< pointer to ip packet header */
+#endif /* __rtems__ */
 #else
 	struct ip *ip_hdr;		/**< pointer to ip packet header */
 #endif //#ifdef INET6

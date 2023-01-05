@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1998-2007 The TCPDUMP project
  *
@@ -401,3 +405,6 @@ vtp_print (netdissect_options *ndo,
  * c-basic-offset: 4
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-vtp-data.h"
+#endif /* __rtems__ */

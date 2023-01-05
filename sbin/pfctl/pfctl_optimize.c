@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include "rtems-bsd-pfctl-namespace.h"
+#endif /* __rtems__ */
+
 /*	$OpenBSD: pfctl_optimize.c,v 1.17 2008/05/06 03:45:21 mpf Exp $ */
 
 /*
@@ -19,6 +23,10 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#define	pf_find_or_create_ruleset _bsd_pf_find_or_create_ruleset
+#endif /* __rtems__ */
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -40,6 +48,15 @@ __FBSDID("$FreeBSD$");
 
 #include "pfctl_parser.h"
 #include "pfctl.h"
+#ifdef __rtems__
+struct pf_rule_field {
+	const char	*prf_name;
+	int		 prf_type;
+	size_t		 prf_offset;
+	size_t		 prf_size;
+};
+#include "rtems-bsd-pfctl-pfctl_optimize-data.h"
+#endif /* __rtems__ */
 
 /* The size at which a table becomes faster than individual rules */
 #define TABLE_THRESHOLD		6
@@ -90,12 +107,16 @@ enum {
     COMBINED,	/* the field may itself be combined with other rules */
     DC,		/* we just don't care about the field */
     NEVER};	/* we should never see this field set?!? */
+#ifndef __rtems__
 static struct pf_rule_field {
 	const char	*prf_name;
 	int		 prf_type;
 	size_t		 prf_offset;
 	size_t		 prf_size;
 } pf_rule_desc[] = {
+#else /* __rtems__ */
+static struct pf_rule_field pf_rule_desc[] = {
+#endif /* __rtems__ */
 #define PF_RULE_FIELD(field, ty)	\
     {#field,				\
     ty,					\
@@ -1220,6 +1241,9 @@ skip_init(void)
 /*
  * Add a host/netmask to a table
  */
+#ifdef __rtems__
+static int add_opt_tablenum = 0;
+#endif /* __rtems__ */
 int
 add_opt_table(struct pfctl *pf, struct pf_opt_tbl **tbl, sa_family_t af,
     struct pf_rule_addr *addr)
@@ -1227,7 +1251,9 @@ add_opt_table(struct pfctl *pf, struct pf_opt_tbl **tbl, sa_family_t af,
 #ifdef OPT_DEBUG
 	char buf[128];
 #endif /* OPT_DEBUG */
+#ifndef __rtems__
 	static int tablenum = 0;
+#endif /* __rtems__ */
 	struct node_host node_host;
 
 	if (*tbl == NULL) {
@@ -1240,7 +1266,11 @@ add_opt_table(struct pfctl *pf, struct pf_opt_tbl **tbl, sa_family_t af,
 
 		/* This is just a temporary table name */
 		snprintf((*tbl)->pt_name, sizeof((*tbl)->pt_name), "%s%d",
+#ifndef __rtems__
 		    PF_OPT_TABLE_PREFIX, tablenum++);
+#else /* __rtems__ */
+		    PF_OPT_TABLE_PREFIX, add_opt_tablenum++);
+#endif /* __rtems__ */
 		DEBUG("creating table <%s>", (*tbl)->pt_name);
 	}
 
@@ -1281,10 +1311,15 @@ add_opt_table(struct pfctl *pf, struct pf_opt_tbl **tbl, sa_family_t af,
  * Do the dirty work of choosing an unused table name and creating it.
  * (be careful with the table name, it might already be used in another anchor)
  */
+#ifdef __rtems__
+static int pf_opt_create_tablenum;
+#endif /* __rtems__ */
 int
 pf_opt_create_table(struct pfctl *pf, struct pf_opt_tbl *tbl)
 {
+#ifndef __rtems__
 	static int tablenum;
+#endif /* __rtems__ */
 	struct pfr_table *t;
 
 	if (table_buffer.pfrb_type == 0) {
@@ -1307,9 +1342,17 @@ pf_opt_create_table(struct pfctl *pf, struct pf_opt_tbl *tbl)
 	/* Now we have to pick a table name that isn't used */
 again:
 	DEBUG("translating temporary table <%s> to <%s%x_%d>", tbl->pt_name,
+#ifndef __rtems__
 	    PF_OPT_TABLE_PREFIX, table_identifier, tablenum);
+#else /* __rtems__ */
+	    PF_OPT_TABLE_PREFIX, table_identifier, pf_opt_create_tablenum);
+#endif /* __rtems__ */
 	snprintf(tbl->pt_name, sizeof(tbl->pt_name), "%s%x_%d",
+#ifndef __rtems__
 	    PF_OPT_TABLE_PREFIX, table_identifier, tablenum);
+#else /* __rtems__ */
+	    PF_OPT_TABLE_PREFIX, table_identifier, pf_opt_create_tablenum);
+#endif /* __rtems__ */
 	PFRB_FOREACH(t, &table_buffer) {
 		if (strcasecmp(t->pfrt_name, tbl->pt_name) == 0) {
 			/* Collision.  Try again */
@@ -1319,7 +1362,11 @@ again:
 			goto again;
 		}
 	}
+#ifndef __rtems__
 	tablenum++;
+#else /* __rtems__ */
+	pf_opt_create_tablenum++;
+#endif /* __rtems__ */
 
 
 	if (pfctl_define_table(tbl->pt_name, PFR_TFLAG_CONST, 1,

@@ -40,6 +40,7 @@
 #include <sys/_mutex.h>
 #include <sys/signal.h>
 
+#ifndef __rtems__
 /*
  * Kernel signal definitions and data structures.
  */
@@ -400,5 +401,22 @@ void	tdsignal(struct thread *td, int sig);
 void	trapsignal(struct thread *td, ksiginfo_t *ksi);
 
 #endif /* _KERNEL */
+#else /* __rtems__ */
+#ifdef _KERNEL
+typedef int ksiginfo_t;
+
+struct sigio;
+
+static __inline void
+pgsigio(struct sigio **sigiop, int sig, int checkctty)
+{
+
+	(void)sigiop;
+	(void)sig;
+	(void)checkctty;
+	BSD_ASSERT(0);
+}
+#endif /* _KERNEL */
+#endif /* __rtems__ */
 
 #endif /* !_SYS_SIGNALVAR_H_ */

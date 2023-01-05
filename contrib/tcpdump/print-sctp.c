@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /* Copyright (c) 2001 NETLAB, Temple University
  * Copyright (c) 2001 Protocol Engineering Lab, University of Delaware
  *
@@ -815,3 +819,6 @@ void sctp_print(netdissect_options *ndo,
 trunc:
     ND_PRINT((ndo, "[|sctp]"));
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-sctp-data.h"
+#endif /* __rtems__ */

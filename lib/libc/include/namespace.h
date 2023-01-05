@@ -24,32 +24,24 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $FreeBSD$
  */
 
 #ifndef _NAMESPACE_H_
 #define _NAMESPACE_H_
 
 /*
- * Adjust names so that headers declare "hidden" names.
+ * Reverse the use of "hidden" names in the source code.
  *
  * README: When modifying this file don't forget to make the appropriate
  *         changes in un-namespace.h!!!
  */
 
-/*
- * ISO C (C90) section.  Most names in libc aren't in ISO C, so they
- * should be here.  Most aren't here...
- */
-#define		err				_err
-#define		warn				_warn
-#define		nsdispatch			_nsdispatch
 
 /*
  * Prototypes for syscalls/functions that need to be overridden
  * in libc_r/libpthread.
  */
+#ifndef __rtems__
 #define		accept				_accept
 #define		__acl_aclcheck_fd		___acl_aclcheck_fd
 #define		__acl_delete_fd			___acl_delete_fd
@@ -240,34 +232,42 @@
 #define		waitpid				_waitpid
 #define		write				_write
 #define		writev				_writev
+#endif /* __rtems__ */
 
+#define _open				open
+#define _close				close
+#define _read				read
+#define _write				write
+#define _writev				writev
+#define _fcntl				fcntl
+#define _fsync				fsync
+#define _fstat				fstat
+#define _stat				stat
+#define _ioctl				ioctl
 
-/*
- * Other hidden syscalls/functions that libc_r needs to override
- * but are not used internally by libc.
- *
- * XXX - When modifying libc to use one of the following, remove
- * the prototype from below and place it in the list above.
- */
-#if 0
-#define		creat				_creat
-#define		fchflags			_fchflags
-#define		fchmod				_fchmod
-#define		ftrylockfile			_ftrylockfile
-#define		msync				_msync
-#define		nfssvc				_nfssvc
-#define		pause				_pause
-#define		sched_yield			_sched_yield
-#define		sendfile			_sendfile
-#define		shutdown			_shutdown
-#define		sigaltstack			_sigaltstack
-#define		sigpending			_sigpending
-#define		sigreturn			_sigreturn
-#define		sigsetmask			_sigsetmask
-#define		sleep				_sleep
-#define		system				_system
-#define		tcdrain				_tcdrain
-#define		wait				_wait
-#endif
+#define _sigprocmask			sigprocmask
+
+#define _recvfrom			recvfrom
+#define _sendto				sendto
+#define _setsockopt			setsockopt
+#define _socket				socket
+#define _connect			connect
+#define _getpeername			getpeername
+#define _getprogname			getprogname
+#define _getsockname			getsockname
+#ifdef __rtems__
+#define _bind				bind
+#define _getsockopt			getsockopt
+#define _poll				poll
+#define _pthread_getspecific		pthread_getspecific
+#define _pthread_key_create		pthread_key_create
+#define _pthread_mutex_lock		pthread_mutex_lock
+#define _pthread_mutex_unlock		pthread_mutex_unlock
+#define _pthread_once			pthread_once
+#define _pthread_rwlock_rdlock		pthread_rwlock_rdlock
+#define _pthread_rwlock_unlock		pthread_rwlock_unlock
+#define _pthread_rwlock_wrlock		pthread_rwlock_wrlock
+#define _pthread_setspecific		pthread_setspecific
+#endif /* __rtems__ */
 
 #endif /* _NAMESPACE_H_ */

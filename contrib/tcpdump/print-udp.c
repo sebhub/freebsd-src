@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /*
  * Copyright (c) 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997
  *	The Regents of the University of California.  All rights reserved.
@@ -421,7 +425,9 @@ udp_print(netdissect_options *ndo, register const u_char *bp, u_int length,
 
 	if (ndo->ndo_packettype) {
 		register const struct sunrpc_msg *rp;
+#ifndef __rtems__
 		enum sunrpc_msg_type direction;
+#endif /* __rtems__ */
 
 		switch (ndo->ndo_packettype) {
 
@@ -437,11 +443,13 @@ udp_print(netdissect_options *ndo, register const u_char *bp, u_int length,
 
 		case PT_RPC:
 			rp = (const struct sunrpc_msg *)(up + 1);
+#ifndef __rtems__
 			direction = (enum sunrpc_msg_type)EXTRACT_32BITS(&rp->rm_direction);
 			if (direction == SUNRPC_CALL)
 				sunrpcrequest_print(ndo, (const u_char *)rp, length,
 				    (const u_char *)ip);
 			else
+#endif /* __rtems__ */
 				nfsreply_print(ndo, (const u_char *)rp, length,
 				    (const u_char *)ip);			/*XXX*/
 			break;
@@ -716,3 +724,6 @@ trunc:
  * c-basic-offset: 8
  * End:
  */
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-print-udp-data.h"
+#endif /* __rtems__ */

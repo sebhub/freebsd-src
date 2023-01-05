@@ -206,8 +206,10 @@ vnet_rts_init(void)
 	int tmp;
 
 	if (IS_DEFAULT_VNET(curvnet)) {
+#ifndef __rtems__
 		if (TUNABLE_INT_FETCH("net.route.netisr_maxqlen", &tmp))
 			rtsock_nh.nh_qlimit = tmp;
+#endif /* __rtems__ */
 		netisr_register(&rtsock_nh);
 	}
 #ifdef VIMAGE
@@ -305,7 +307,11 @@ rts_attach(struct socket *so, int proto, struct thread *td)
 	rp = malloc(sizeof *rp, M_PCB, M_WAITOK | M_ZERO);
 
 	so->so_pcb = (caddr_t)rp;
+#ifndef __rtems__
 	so->so_fibnum = td->td_proc->p_fibnum;
+#else /* __rtems__ */
+	so->so_fibnum = BSD_DEFAULT_FIB;
+#endif /* __rtems__ */
 	error = raw_attach(so, proto);
 	rp = sotorawcb(so);
 	if (error) {
@@ -601,7 +607,11 @@ route_output(struct mbuf *m, struct socket *so, ...)
 	 * caller PID and error value.
 	 */
 
+#ifndef __rtems__
 	rtm->rtm_pid = curproc->p_pid;
+#else /* __rtems__ */
+	rtm->rtm_pid = BSD_DEFAULT_PID;
+#endif /* __rtems__ */
 	info.rti_addrs = rtm->rtm_addrs;
 
 	info.rti_mflags = rtm->rtm_inits;
@@ -1880,10 +1890,18 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 		return (EPERM);
 	if (name[1] == NET_RT_DUMP) {
 		if (namelen == 3)
+#ifndef __rtems__
 			fib = req->td->td_proc->p_fibnum;
+#else /* __rtems__ */
+			fib = BSD_DEFAULT_FIB;
+#endif /* __rtems__ */
 		else if (namelen == 4)
 			fib = (name[3] == RT_ALL_FIBS) ?
+#ifndef __rtems__
 			    req->td->td_proc->p_fibnum : name[3];
+#else /* __rtems__ */
+			    BSD_DEFAULT_FIB : name[3];
+#endif /* __rtems__ */
 		else
 			return ((namelen < 3) ? EISDIR : ENOTDIR);
 		if (fib < 0 || fib >= rt_numfibs)
@@ -1930,7 +1948,7 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 			else
 				error = EINVAL;
 			break;
-		}
+        }
 		/*
 		 * take care of routing entries
 		 */

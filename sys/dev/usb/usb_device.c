@@ -121,6 +121,7 @@ int	usb_template = USB_TEMPLATE;
 int	usb_template = -1;
 #endif
 
+#ifndef __rtems__
 SYSCTL_PROC(_hw_usb, OID_AUTO, template,
     CTLTYPE_INT | CTLFLAG_RWTUN | CTLFLAG_MPSAFE,
     NULL, 0, sysctl_hw_usb_template,
@@ -252,17 +253,20 @@ sysctl_hw_usb_template(SYSCTL_HANDLER_ARGS)
 
 	return (0);
 }
+#endif /* __rtems__ */
 
 /* English is default language */
 
 static int usb_lang_id = 0x0009;
 static int usb_lang_mask = 0x00FF;
 
+#ifndef __rtems__
 SYSCTL_INT(_hw_usb, OID_AUTO, usb_lang_id, CTLFLAG_RWTUN,
     &usb_lang_id, 0, "Preferred USB language ID");
 
 SYSCTL_INT(_hw_usb, OID_AUTO, usb_lang_mask, CTLFLAG_RWTUN,
     &usb_lang_mask, 0, "Preferred USB language mask");
+#endif /* __rtems__ */
 
 static const char* statestr[USB_STATE_MAX] = {
 	[USB_STATE_DETACHED]	= "DETACHED",

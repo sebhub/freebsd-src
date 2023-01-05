@@ -66,6 +66,10 @@
  *	@(#)in_pcb.c	8.2 (Berkeley) 1/4/94
  */
 
+#ifdef __rtems__
+#include <errno.h>
+#undef errno
+#endif /* __rtems__ */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -230,8 +234,12 @@ in6_pcbbind(struct inpcb *inp, struct sockaddr *nam,
 				     !IN6_IS_ADDR_UNSPECIFIED(&t->in6p_laddr) ||
 				     (t->inp_flags2 & INP_REUSEPORT) ||
 				     (t->inp_flags2 & INP_REUSEPORT_LB) == 0) &&
+#ifndef __rtems__
 				    (inp->inp_cred->cr_uid !=
 				     t->inp_cred->cr_uid))
+#else /* __rtems__ */
+				    0)
+#endif /* __rtems__ */
 					return (EADDRINUSE);
 
 				/*
@@ -259,8 +267,12 @@ in6_pcbbind(struct inpcb *inp, struct sockaddr *nam,
 					    (so->so_type != SOCK_STREAM ||
 					     ntohl(t->inp_faddr.s_addr) ==
 					      INADDR_ANY) &&
+#ifndef __rtems__
 					    (inp->inp_cred->cr_uid !=
 					     t->inp_cred->cr_uid))
+#else /* __rtems__ */
+					    0)
+#endif /* __rtems__ */
 						return (EADDRINUSE);
 
 					if (t && (! in_pcbbind_check_bindmulti(inp, t)))

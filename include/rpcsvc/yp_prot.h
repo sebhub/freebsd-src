@@ -69,10 +69,12 @@
  * YPPROC_MAPLIST	takes (char *), returns (struct ypmaplist *).
  */
 
+#ifndef __rtems__
 #ifndef BOOL_DEFINED
 typedef u_int bool;
 #define BOOL_DEFINED
 #endif
+#endif /* __rtems__ */
 
 /* Program and version symbols, magic numbers */
 
@@ -235,7 +237,8 @@ struct dom_binding {
 /* error code in ypbind_resp.ypbind_status */
 enum ypbind_resptype {
 	YPBIND_SUCC_VAL = 1,
-	YPBIND_FAIL_VAL = 2
+	YPBIND_FAIL_VAL = 2,
+	_YPBIND_RESPTYPE = 0xffffffff
 };
 
 /* network order, of course */

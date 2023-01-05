@@ -41,6 +41,9 @@
 #include <machine/atomic.h>
 #endif
 
+#ifdef __rtems__
+#define RWLOCK_NOINLINE 1
+#endif /* __rtems__ */
 /*
  * The rw_lock field consists of several fields.  The low bit indicates
  * if the lock is locked with a read (shared) or write (exclusive) lock.
@@ -103,6 +106,7 @@
  * the work is deferred to another function.
  */
 
+#ifndef __rtems__
 /* Acquire a write lock. */
 #define	__rw_wlock(rw, tid, file, line) do {				\
 	uintptr_t _tid = (uintptr_t)(tid);				\
@@ -121,12 +125,14 @@
 	    !_rw_write_unlock_fetch((rw), &_v)))			\
 		_rw_wunlock_hard((rw), _v, (file), (line));		\
 } while (0)
+#endif /* __rtems__ */
 
 /*
  * Function prototypes.  Routines that start with _ are not part of the
  * external API and should not be called directly.  Wrapper macros should
  * be used instead.
  */
+#ifndef __rtems__
 void	_rw_init_flags(volatile uintptr_t *c, const char *name, int opts);
 void	_rw_destroy(volatile uintptr_t *c);
 void	rw_sysinit(void *arg);
@@ -153,7 +159,28 @@ void	__rw_downgrade(volatile uintptr_t *c, const char *file, int line);
 void	__rw_assert(const volatile uintptr_t *c, int what, const char *file,
 	    int line);
 #endif
+#else /* __rtems__ */
+#define	rw_init(rw, n) rw_init_flags(rw, n, 0)
+void	rw_init_flags(struct rwlock *rw, const char *name, int opts);
+void	rw_destroy(struct rwlock *rw);
+void	rw_sysinit(void *arg);
+void	rw_sysinit_flags(void *arg);
+int	rw_wowned(struct rwlock *rw);
+void	_rw_wlock(struct rwlock *rw, const char *file, int line);
+int	_rw_try_wlock(struct rwlock *rw, const char *file, int line);
+void	_rw_wunlock(struct rwlock *rw, const char *file, int line);
+void	_rw_rlock(struct rwlock *rw, const char *file, int line);
+int	_rw_try_rlock(struct rwlock *rw, const char *file, int line);
+void	_rw_runlock(struct rwlock *rw, const char *file, int line);
+int	_rw_try_upgrade(struct rwlock *rw, const char *file, int line);
+void	_rw_downgrade(struct rwlock *rw, const char *file, int line);
+#if defined(INVARIANTS) || defined(INVARIANT_SUPPORT)
+void	_rw_assert(const struct rwlock *rw, int what, const char *file,
+	    int line);
+#endif
+#endif /* __rtems__ */
 
+#ifndef __rtems__
 /*
  * Top-level macros to provide lock cookie once the actual rwlock is passed.
  * They will also prevent passing a malformed object to the rwlock KPI by
@@ -209,6 +236,7 @@ void	__rw_assert(const volatile uintptr_t *c, int what, const char *file,
 #define	_rw_assert(rw, w, f, l)						\
 	__rw_assert(&(rw)->rw_lock, w, f, l)
 #endif
+#endif /* __rtems__ */
 
 
 /*

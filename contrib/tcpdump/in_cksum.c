@@ -1,3 +1,7 @@
+#ifdef __rtems__
+#include <machine/rtems-bsd-program.h>
+#include "rtems-bsd-tcpdump-namespace.h"
+#endif /* __rtems__ */
 /* in_cksum.c
  * 4.4-Lite-2 Internet checksum routine, modified to take a vector of
  * pointers/lengths giving the pieces to be checksummed.  Also using
@@ -198,3 +202,6 @@ in_cksum_shouldbe(uint16_t sum, uint16_t computed_sum)
 	shouldbe = (shouldbe & 0xFFFF) + (shouldbe >> 16);
 	return shouldbe;
 }
+#ifdef __rtems__
+#include "rtems-bsd-tcpdump-in_cksum-data.h"
+#endif /* __rtems__ */

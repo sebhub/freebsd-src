@@ -17,7 +17,9 @@
 
 static int stopped;
 
+#ifndef __rtems__
 static void ssl_library_stop(void);
+#endif /* __rtems__ */
 
 static CRYPTO_ONCE ssl_base = CRYPTO_ONCE_STATIC_INIT;
 static int ssl_base_inited = 0;
@@ -106,11 +108,13 @@ DEFINE_RUN_ONCE_STATIC(ossl_init_ssl_base)
     fprintf(stderr, "OPENSSL_INIT: ossl_init_ssl_base: "
             "SSL_add_ssl_module()\n");
 #endif
+#ifndef __rtems__
     /*
      * We ignore an error return here. Not much we can do - but not that bad
      * either. We can still safely continue.
      */
     OPENSSL_atexit(ssl_library_stop);
+#endif /* __rtems__ */
     ssl_base_inited = 1;
     return 1;
 }
@@ -141,6 +145,7 @@ DEFINE_RUN_ONCE_STATIC_ALT(ossl_init_no_load_ssl_strings,
     return 1;
 }
 
+#ifndef __rtems__
 static void ssl_library_stop(void)
 {
     /* Might be explicitly called and also by atexit */
@@ -172,6 +177,7 @@ static void ssl_library_stop(void)
         err_free_strings_int();
     }
 }
+#endif /* __rtems__ */
 
 /*
  * If this function is called with a non NULL settings value then it must be

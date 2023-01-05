@@ -48,8 +48,12 @@ recv(int s, void *buf, size_t len, int flags)
 	 * POSIX says recv() shall be a cancellation point, so call the
 	 * cancellation-enabled recvfrom() and not _recvfrom().
 	 */
+#ifndef __rtems__
 	return (((ssize_t (*)(int, void *, size_t, int,
 	    struct sockaddr *, socklen_t *))
 	    __libc_interposing[INTERPOS_recvfrom])(s, buf, len, flags,
 	   NULL, NULL));
+#else /* __rtems__ */
+	return (recvfrom(s, buf, len, flags, NULL, 0));
+#endif /* __rtems__ */
 }

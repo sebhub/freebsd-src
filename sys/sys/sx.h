@@ -44,6 +44,12 @@
 #include <machine/atomic.h>
 #endif
 
+#ifdef __rtems__
+#define	SX_NOINLINE 1
+#define	sx_try_xlock_ _bsd_sx_try_slock_int
+#define	sx_try_xlock_int _bsd_sx_try_slock_int
+#define	_sx_sunlock _bsd__sx_sunlock_int
+#endif /* __rtems__ */
 /*
  * In general, the sx locks and rwlocks use very similar algorithms.
  * The main difference in the implementations is how threads are
@@ -106,21 +112,44 @@ void	sx_sysinit(void *arg);
 void	sx_init_flags(struct sx *sx, const char *description, int opts);
 void	sx_destroy(struct sx *sx);
 int	sx_try_slock_int(struct sx *sx LOCK_FILE_LINE_ARG_DEF);
+#ifndef __rtems__
 int	sx_try_slock_(struct sx *sx, const char *file, int line);
 int	sx_try_xlock_int(struct sx *sx LOCK_FILE_LINE_ARG_DEF);
 int	sx_try_xlock_(struct sx *sx, const char *file, int line);
+#endif /* __rtems__ */
 int	sx_try_upgrade_int(struct sx *sx LOCK_FILE_LINE_ARG_DEF);
+#ifndef __rtems__
 int	sx_try_upgrade_(struct sx *sx, const char *file, int line);
+#endif /* __rtems__ */
 void	sx_downgrade_int(struct sx *sx LOCK_FILE_LINE_ARG_DEF);
+#ifndef __rtems__
 void	sx_downgrade_(struct sx *sx, const char *file, int line);
+#endif /* __rtems__ */
 int	_sx_slock_int(struct sx *sx, int opts LOCK_FILE_LINE_ARG_DEF);
+#ifndef __rtems__
 int	_sx_slock(struct sx *sx, int opts, const char *file, int line);
 int	_sx_xlock(struct sx *sx, int opts, const char *file, int line);
+#else /* __rtems__ */
+#if	(LOCK_DEBUG > 0)
+#define	_sx_xlock(sx, opts, file, line) \
+    _bsd__sx_slock_int(sx, opts, file, line)
+#else
+#define	_sx_xlock(sx, opts, file, line) _bsd__sx_slock_int(sx, opts)
+#endif
+#endif /* __rtems__ */
 void	_sx_sunlock_int(struct sx *sx LOCK_FILE_LINE_ARG_DEF);
+#ifndef __rtems__
 void	_sx_sunlock(struct sx *sx, const char *file, int line);
 void	_sx_xunlock(struct sx *sx, const char *file, int line);
 int	_sx_xlock_hard(struct sx *sx, uintptr_t x, int opts LOCK_FILE_LINE_ARG_DEF);
 void	_sx_xunlock_hard(struct sx *sx, uintptr_t x LOCK_FILE_LINE_ARG_DEF);
+#else /* __rtems__ */
+#if	(LOCK_DEBUG > 0)
+#define	_sx_xunlock(sx, file, line) _bsd__sx_sunlock_int(sx, file, line)
+#else
+#define	_sx_xunlock(sx, file, line) _bsd__sx_sunlock_int(sx)
+#endif
+#endif /* __rtems__ */
 #if defined(INVARIANTS) || defined(INVARIANT_SUPPORT)
 void	_sx_assert(const struct sx *sx, int what, const char *file, int line);
 #endif
@@ -147,6 +176,7 @@ struct sx_args {
 
 #define	SX_SYSINIT(name, sxa, desc)	SX_SYSINIT_FLAGS(name, sxa, desc, 0)
 
+#ifndef __rtems__
 /*
  * Full lock operations that are suitable to be inlined in non-debug kernels.
  * If the lock can't be acquired or released trivially then the work is
@@ -181,6 +211,7 @@ __sx_xunlock(struct sx *sx, struct thread *td, const char *file, int line)
 		_sx_xunlock_hard(sx, x);
 }
 #endif
+#endif /* __rtems__ */
 
 /*
  * Public interface for lock operations.
@@ -204,8 +235,13 @@ __sx_xunlock(struct sx *sx, struct thread *td, const char *file, int line)
 	__sx_xunlock((sx), curthread, (file), (line))
 #endif	/* LOCK_DEBUG > 0 || SX_NOINLINE */
 #if	(LOCK_DEBUG > 0)
+#ifndef __rtems__
 #define	sx_slock_(sx, file, line)					\
 	(void)_sx_slock((sx), 0, (file), (line))
+#else /* __rtems__ */
+#define	sx_slock_(sx, file, line)					\
+	(void)_sx_xlock((sx), 0, (file), (line))
+#endif /* __rtems__ */
 #define	sx_slock_sig_(sx, file, line)					\
 	_sx_slock((sx), SX_INTERRUPTIBLE, (file) , (line))
 #define	sx_sunlock_(sx, file, line)					\
@@ -245,6 +281,7 @@ __sx_xunlock(struct sx *sx, struct thread *td, const char *file, int line)
  * Return a pointer to the owning thread if the lock is exclusively
  * locked.
  */
+#ifndef __rtems__
 #define	sx_xholder(sx)							\
 	((sx)->sx_lock & SX_LOCK_SHARED ? NULL :			\
 	(struct thread *)SX_OWNER((sx)->sx_lock))
@@ -261,6 +298,14 @@ __sx_xunlock(struct sx *sx, struct thread *td, const char *file, int line)
 } while (0)
 
 #define	sx_unlock(sx)	sx_unlock_((sx), LOCK_FILE, LOCK_LINE)
+#else /* __rtems__ */
+int sx_xlocked(struct sx *sx);
+#if	(LOCK_DEBUG > 0)
+#define	sx_unlock(sx)	_sx_sunlock_int((sx), LOCK_FILE, LOCK_LINE)
+#else
+#define	sx_unlock(sx)	_sx_sunlock_int((sx))
+#endif
+#endif /* __rtems__ */
 
 #define	sx_sleep(chan, sx, pri, wmesg, timo)				\
 	_sleep((chan), &(sx)->lock_object, (pri), (wmesg),		\
